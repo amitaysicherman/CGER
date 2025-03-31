@@ -81,6 +81,7 @@ class SrcTgtDataset(TorchDataset):
         src_tokens = self.src_tokenizer(
             src_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
         )
+        src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
         src_encoder_outputs = self.src_encoder(**src_tokens)
 
         tgt_tokens = self.tgt_tokenizer(
@@ -161,7 +162,8 @@ class EnzymeDecoder(torch.nn.Module):
 
         loss_fct = CrossEntropyLoss(ignore_index=-100)
         decoder_outputs.loss = loss_fct(
-            decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)), labels[:, 1:].reshape(-1))
+            decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
+            labels[:, 1:].reshape(-1))
         return decoder_outputs
 
 
