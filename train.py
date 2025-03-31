@@ -83,14 +83,13 @@ class SrcTgtDataset(TorchDataset):
         )
         src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
         src_encoder_outputs = self.src_encoder(**src_tokens)
-
         tgt_tokens = self.tgt_tokenizer(
             tgt_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
         )
         labels = tgt_tokens["input_ids"].clone()
         labels[labels == self.tgt_tokenizer.pad_token_id] = -100
         return dict(
-            encoder_outputs=src_encoder_outputs.last_hidden_state.squeeze(0),
+            encoder_outputs=src_encoder_outputs.last_hidden_state.squeeze(0).detach().cpu(),
             encoder_attention_mask=src_tokens["attention_mask"].squeeze(0),
             input_ids=tgt_tokens["input_ids"].squeeze(0),
             attention_mask=tgt_tokens["attention_mask"].squeeze(0),
