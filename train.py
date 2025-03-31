@@ -90,7 +90,7 @@ class SrcTgtDataset(TorchDataset):
         labels[labels == self.tgt_tokenizer.pad_token_id] = -100
         return dict(
             encoder_outputs=src_encoder_outputs.last_hidden_state.squeeze(0).detach().cpu(),
-            encoder_attention_mask=src_tokens["attention_mask"].squeeze(0),
+            encoder_attention_mask=src_tokens["attention_mask"].squeeze(0).detach().cpu(),
             input_ids=tgt_tokens["input_ids"].squeeze(0),
             attention_mask=tgt_tokens["attention_mask"].squeeze(0),
             labels=labels.squeeze(0),
