@@ -43,11 +43,12 @@ class Trie:
         print_node(self.root)
 
 
-def build_trie(word_list, tokenizer, decoder_start_token):
+def build_trie(word_list, tokenizer, max_length=512):
     tokens_list = []
     for word in word_list:
         tokens = tokenizer.encode(word, add_special_tokens=True)
-        tokens = [decoder_start_token] + tokens
+        if len(tokens) > max_length:
+            tokens = tokens[:max_length-1]+[tokenizer.eos_token_id]
         tokens_list.append(tokens)
     return Trie(tokens_list, empty_token=tokenizer.pad_token_id)
 
@@ -70,7 +71,7 @@ def build_mask_from_trie(trie, sequences, vocab_size):
         current_node = trie.root
         for seq_idx in range(seq_length):
             token = int(sequences[batch_idx, seq_idx].item())
-            if token == -100:
+            if token == trie.empty_token:
                 break
             for child_token in current_node[token]:
                 mask[batch_idx, seq_idx, child_token] = 1
