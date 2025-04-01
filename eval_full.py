@@ -19,6 +19,10 @@ args = parser.parse_args()
 src_train, tgt_train, src_test, tgt_test = load_files(level=args.level)
 reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                                  dropout=args.dropout)
+reaction_model.to(device)
+reaction_model.eval()
+decoder.to(device)
+decoder.eval()
 test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model)
 
 all_enzyme_tokens = []
