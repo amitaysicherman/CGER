@@ -3,7 +3,7 @@
 #SBATCH --mem=64G
 #SBATCH --requeue
 #SBATCH -c 8
-#SBATCH -w bruno[1-3],euler1,houdini,newton5,nlp-l40-[1-2],tdk-bm4,dym-lab,dym-lab2,galileo[1-2],newton[3-4],nlp-a40-1,chuck[1-2]
+#SBATCH --gres=gpu:L40:1
 #SBATCH --array=0-15
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
