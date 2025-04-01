@@ -6,6 +6,7 @@ from trie import build_trie
 import os
 from torch.nn import functional as F
 from tqdm import tqdm
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 parser = argparse.ArgumentParser()
 parser.add_argument("--level", type=str, default="easy")
@@ -41,8 +42,10 @@ all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
 last_cp_dir = all_cp_dirs[-1]
 model_path = os.path.join(last_cp_dir, "pytorch_model.bin")
 model.load_state_dict(torch.load(model_path))
+all_res = []
 model.eval().to(device)
-for test_data in test_dataset:
+pbar = tqdm(test_dataset, total=len(test_dataset))
+for test_data in pbar:
     test_data = {k: v.unsqueeze(0).to(device) for k, v in test_data.items()}
     all_scores = []
     for enzyme_option in tqdm(all_enzyme_tokens):
@@ -70,7 +73,7 @@ for test_data in test_dataset:
     best_seq = all_enzyme_tokens[best_idx]
     best_seq = esm_tokenizer.decode(best_seq[0].tolist(), skip_special_tokens=True)
     best_seq = best_seq.replace(" ", "")
-    print(f"Best sequence: {best_seq}")
     gt_seq = esm_tokenizer.decode(test_data["input_ids"][0].tolist(), skip_special_tokens=True)
     gt_seq = gt_seq.replace(" ", "")
-    print(f"Ground truth: {gt_seq}")
+    all_res.append(gt_seq == best_seq)
+    pbar.set_description(f"Accuracy: {np.mean(all_res):.4f}")
