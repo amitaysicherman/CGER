@@ -237,6 +237,7 @@ if __name__ == "__main__":
         metric_for_best_model="eval_test_token_accuracy",
         report_to=[args.report_to],
         save_safetensors=False,
+        auto_find_batch_size=True,
     )
 
     # Define trainer
