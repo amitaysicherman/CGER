@@ -8,17 +8,27 @@ from torch.utils.data import Dataset as TorchDataset
 from os.path import join as pjoin
 import numpy as np
 from torch.nn import CrossEntropyLoss
+import glob
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
+num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
+num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
 
-def get_encoder_decoder():
+
+def get_encoder_decoder(decoder_size="m", dropout=0.1):
     # Load the pretrained tokenizers
     reaction_model, reaction_tokenizer = get_model_and_tokenizer()
     reaction_model.eval().to(device)
     for param in reaction_model.parameters():
         param.requires_grad = False
     esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t36_3B_UR50D", trust_remote_code=True)
+
+    hidden_size = hidden_size_per_size[decoder_size]
+    num_hidden_layers = num_layers_per_size[decoder_size]
+    num_attention_heads = num_attention_heads_per_size[decoder_size]
+    intermediate_size = hidden_size * 4
 
     # Load the pretrained decoder
     decoder_config = BertGenerationConfig(
@@ -30,12 +40,12 @@ def get_encoder_decoder():
         is_encoder_decoder=True,
         is_decoder=True,
         add_cross_attention=True,
-        hidden_size=256,
-        num_hidden_layers=6,
-        num_attention_heads=4,
-        intermediate_size=1024,
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=num_attention_heads,
+        intermediate_size=intermediate_size,
+        hidden_dropout_prob=dropout,
+        attention_probs_dropout_prob=dropout,
         max_position_embeddings=512,
 
     )
@@ -51,8 +61,9 @@ def load_file(file_path):
     return texts
 
 
-def load_files(base_dir="data/easy"):
-    """Load source and target text files"""
+def load_files(level="easy"):
+    """Load training and testing files"""
+    base_dir = f"data/{level}/"
     src_train = load_file(pjoin(base_dir, "train_reaction.txt"))
     tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt"))
     src_test = load_file(pjoin(base_dir, "test_reaction.txt"))
@@ -150,6 +161,9 @@ class EnzymeDecoder(torch.nn.Module):
             encoder_hidden_states=encoder_outputs,
             labels=labels,
         )
+        if self.trie is None:
+            return decoder_outputs
+
         trie_mask = build_mask_from_trie(self.trie, input_ids, self.decoder.config.vocab_size)
         trie_mask = trie_mask[:, :-1, :]
         trie_mask_out = trie_mask.sum(dim=-1) <= 1
@@ -170,7 +184,6 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output_dir", type=str, default="results")
     parser.add_argument("--log_dir", type=str, default="logs")
     parser.add_argument("--log_steps", type=int, default=500)
     parser.add_argument("--eval_steps", type=int, default=1000)
@@ -180,10 +193,15 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--report_to", type=str, default="tensorboard")
+    parser.add_argument("--size", type=str, default="m")
+    parser.add_argument("--level", type=str, default="easy")
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--trie", type=int, default=1)
     args = parser.parse_args()
 
-    src_train, tgt_train, src_test, tgt_test = load_files()
-    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder()
+    src_train, tgt_train, src_test, tgt_test = load_files(level=args.level)
+    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=args.size,
+                                                                                     dropout=args.dropout)
 
     # Create datasets and dataloaders
     train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model)
@@ -192,13 +210,16 @@ if __name__ == "__main__":
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
-    # Create the model
-    trie = build_trie(tgt_train + tgt_test, esm_tokenizer)
-
+    if args.trie:
+        trie = build_trie(tgt_train + tgt_test, esm_tokenizer)
+    else:
+        trie = None
     model = EnzymeDecoder(decoder, trie=trie)
-    output_dir = args.output_dir
+    output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
+    logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
+        logging_dir=logs_dir,
         evaluation_strategy="steps",
         learning_rate=args.learning_rate,
         per_device_train_batch_size=args.batch_size,
@@ -228,6 +249,7 @@ if __name__ == "__main__":
     )
     # Train model
     print("Training model...")
-    trainer.train()
+
+    trainer.train(resume_from_checkpoint=len(glob.glob(pjoin(output_dir, "checkpoint-*"))) > 0)
 
     print("Training complete!")
