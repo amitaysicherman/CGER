@@ -148,7 +148,7 @@ def compute_metrics(eval_preds):
 
 
 class EnzymeDecoder(torch.nn.Module):
-    def __init__(self, decoder):
+    def __init__(self, decoder, trie=None):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
