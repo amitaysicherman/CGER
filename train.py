@@ -15,6 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
 num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
 num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
+ENCODER_DIM = 256
 
 
 def get_encoder_decoder(decoder_size="m", dropout=0.1):
@@ -147,13 +148,20 @@ def compute_metrics(eval_preds):
 
 
 class EnzymeDecoder(torch.nn.Module):
-    def __init__(self, decoder, trie):
+    def __init__(self, decoder):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
+        if self.decoder.config.hidden_size != ENCODER_DIM:
+            self.encoder_project = torch.nn.Linear(
+                ENCODER_DIM, self.decoder.config.hidden_size
+            )
+        else:
+            self.encoder_project = torch.nn.Identity()
 
     def forward(self, input_ids, attention_mask, encoder_outputs, encoder_attention_mask, labels):
         # Encode the input
+        encoder_outputs = self.encoder_project(encoder_outputs)
         decoder_outputs = self.decoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
