@@ -224,6 +224,8 @@ if __name__ == "__main__":
         trie = None
     model = EnzymeDecoder(decoder, trie=trie)
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
+    if args.trie == 0:
+        output_dir += "_notrie"
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
