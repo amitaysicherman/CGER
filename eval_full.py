@@ -53,7 +53,7 @@ for test_data in pbar:
     test_data = {k: v.unsqueeze(0).to(device) for k, v in test_data.items()}
     all_scores = []
     for enzyme_option in tqdm(all_enzyme_tokens):
-        enzyme_option.to(device)
+        enzyme_option = enzyme_option.to(device)
         with torch.no_grad():
             model_output = model(
                 encoder_outputs=test_data["encoder_outputs"],
