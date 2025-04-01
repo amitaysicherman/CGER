@@ -26,7 +26,8 @@ decoder.eval()
 test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model)
 
 all_enzyme_tokens = []
-for seq in set(tgt_train + tgt_test):
+all_enzyme_sequences = list(set(tgt_train + tgt_test))
+for seq in all_enzyme_sequences:
     tokens = esm_tokenizer.encode(seq, add_special_tokens=True)
     if len(tokens) > 512:
         tokens = tokens[:511] + [esm_tokenizer.eos_token_id]
@@ -52,6 +53,10 @@ pbar = tqdm(test_dataset, total=len(test_dataset))
 for test_data in pbar:
     test_data = {k: v.unsqueeze(0).to(device) for k, v in test_data.items()}
     all_scores = []
+    gt_seq = esm_tokenizer.decode(test_data["input_ids"][0].tolist(), skip_special_tokens=True)
+    gt_seq = gt_seq.replace(" ", "")
+    gt_index=all_enzyme_sequences.index(gt_seq)
+    print(f"Ground truth sequence: {gt_seq} ({gt_index})")
     for enzyme_option in tqdm(all_enzyme_tokens):
         enzyme_option = enzyme_option.to(device)
         with torch.no_grad():

@@ -152,12 +152,9 @@ class EnzymeDecoder(torch.nn.Module):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
-        if self.decoder.config.hidden_size != ENCODER_DIM:
-            self.encoder_project = torch.nn.Linear(
-                ENCODER_DIM, self.decoder.config.hidden_size
-            )
-        else:
-            self.encoder_project = torch.nn.Identity()
+        self.encoder_project = torch.nn.Linear(
+            ENCODER_DIM, self.decoder.config.hidden_size
+        )
 
     def forward(self, input_ids, attention_mask, encoder_outputs, encoder_attention_mask, labels):
         # Encode the input
