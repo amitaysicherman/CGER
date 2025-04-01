@@ -175,16 +175,17 @@ class EnzymeDecoder(torch.nn.Module):
         trie_mask = build_mask_from_trie(self.trie, input_ids, self.decoder.config.vocab_size)
         trie_mask = trie_mask[:, :-1, :]
         trie_mask_out = trie_mask.sum(dim=-1) <= 1
+        decoder_outputs.trie_mask_out = trie_mask_out
         trie_mask = trie_mask.masked_fill(trie_mask == 0, -1e6)
         trie_mask = trie_mask.masked_fill(trie_mask == 1, 0)
         trie_mask = trie_mask.to(decoder_outputs.logits.device)
-        labels[:, 1:][trie_mask_out] = -100
         decoder_outputs.logits[:, :-1] += trie_mask
-
-        loss_fct = CrossEntropyLoss(ignore_index=-100)
-        decoder_outputs.loss = loss_fct(
-            decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
-            labels[:, 1:].reshape(-1))
+        if labels is not None:
+            labels[:, 1:][trie_mask_out] = -100
+            loss_fct = CrossEntropyLoss(ignore_index=-100)
+            decoder_outputs.loss = loss_fct(
+                decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
+                labels[:, 1:].reshape(-1))
         return decoder_outputs
 
 
