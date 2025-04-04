@@ -26,4 +26,3 @@ elif [ $split_index -eq 6 ]; then
 elif [ $split_index -eq 7 ]; then
   python train.py --size "l" --dropout 0.0
 fi
-    
