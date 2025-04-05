@@ -155,13 +155,21 @@ def compute_metrics(eval_preds):
 
 
 class EnzymeDecoder(torch.nn.Module):
-    def __init__(self, decoder, trie=None,encoder_dim=ENCODER_DIM):
+    def __init__(self, decoder, trie=None,encoder_dim=ENCODER_DIM, bottleneck_dim=0):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
-        self.encoder_project = torch.nn.Linear(
-            encoder_dim, self.decoder.config.hidden_size
-        )
+        if bottleneck_dim > 0:
+            self.encoder_project = torch.nn.Sequential(
+                torch.nn.Linear(encoder_dim, bottleneck_dim),
+                torch.nn.ReLU(),
+                torch.nn.Linear(bottleneck_dim, self.decoder.config.hidden_size)
+            )
+        else:
+            self.encoder_project = torch.nn.Linear(
+                encoder_dim, self.decoder.config.hidden_size
+            )
+
 
     def forward(self, input_ids, attention_mask, encoder_outputs, encoder_attention_mask, labels):
         # Encode the input
@@ -210,6 +218,7 @@ if __name__ == "__main__":
     parser.add_argument("--level", type=str, default="drugbank")
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--trie", type=int, default=1)
+    parser.add_argument("--bottleneck_dim", type=int, default=0)
     args = parser.parse_args()
 
     src_train, tgt_train, src_test, tgt_test = load_files(level=args.level)
@@ -228,12 +237,15 @@ if __name__ == "__main__":
         trie = build_trie(tgt_train + tgt_test, esm_tokenizer)
     else:
         trie = None
-    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=ENCODER_DIM if args.level != "drugbank" else 768)
+    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=ENCODER_DIM if args.level != "drugbank" else 768,
+                          bottleneck_dim=args.bottleneck_dim)
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
     if args.trie == 0:
         output_dir += "_notrie"
+    if args.bottleneck_dim > 0:
+        output_dir += f"_bottleneck_{args.bottleneck_dim}"
     if args.level == "drugbank":
-        output_dir.replace("results", "results_drugbank")
+        output_dir=output_dir.replace("results", "results_drugbank")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
