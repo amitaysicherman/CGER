@@ -22,8 +22,8 @@ if __name__ == "__main__":
     all_fasta = []
     for i, line in enumerate(lines):
         _, __, smiles, fasta, label = line.split(" ")
-        i = int(i)
-        if i == 0:
+        label = int(label)
+        if label == 0:
             continue
         smiles = remove_stereo_mol(smiles)
         all_smiles.append(smiles)
