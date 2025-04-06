@@ -105,8 +105,11 @@ class SrcTgtDataset(TorchDataset):
         src_encoder_outputs = self.src_encoder(**src_tokens)
         if self.pooling:
             src_encoder_outputs = src_encoder_outputs.pooler_output
+            src_attention_mask = torch.ones(1).to(device)
         else:
             src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
+            src_attention_mask = src_tokens["attention_mask"].squeeze(0)
+
         tgt_tokens = self.tgt_tokenizer(
             tgt_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
         )
@@ -114,7 +117,7 @@ class SrcTgtDataset(TorchDataset):
         labels[labels == self.tgt_tokenizer.pad_token_id] = -100
         return dict(
             encoder_outputs=src_encoder_outputs.detach().cpu(),
-            encoder_attention_mask=src_tokens["attention_mask"].squeeze(0).detach().cpu(),
+            encoder_attention_mask=src_attention_mask.detach().cpu(),
             input_ids=tgt_tokens["input_ids"].squeeze(0),
             attention_mask=tgt_tokens["attention_mask"].squeeze(0),
             labels=labels.squeeze(0),
@@ -232,8 +235,10 @@ if __name__ == "__main__":
                                                                                      drugbank=args.level == "drugbank")
 
     # Create datasets and dataloaders
-    train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model,pooling=args.pooling)
-    test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model, pooling=args.pooling)
+    train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model,
+                                  pooling=args.pooling)
+    test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model,
+                                 pooling=args.pooling)
 
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
