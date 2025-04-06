@@ -14,20 +14,25 @@ def remove_stereo_mol(smiles):
 
 
 if __name__ == "__main__":
+    random.seed(42)
     input_file = "data/drugbank/DrugBank.txt"
     output_base = f"data/drugbank"
     with open(input_file, "r") as f:
         lines = f.read().splitlines()
     all_smiles = []
     all_fasta = []
+    skip_count = 0
     for i, line in enumerate(lines):
         _, __, smiles, fasta, label = line.split(" ")
         label = int(label)
         if label == 0:
+            skip_count += 1
             continue
         smiles = remove_stereo_mol(smiles)
         all_smiles.append(smiles)
         all_fasta.append(fasta)
+    print(f"skip count: {skip_count}")
+    print(f"total count: {len(all_smiles)}")
     fasta_unique = set(all_fasta)
 
     train_smiles = []
