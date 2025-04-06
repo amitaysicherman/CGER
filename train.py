@@ -82,13 +82,14 @@ def load_files(level="easy"):
 
 
 class SrcTgtDataset(TorchDataset):
-    def __init__(self, src_texts, tgt_texts, src_tokenizer, tgt_tokenizer, src_encoder, max_length=512):
+    def __init__(self, src_texts, tgt_texts, src_tokenizer, tgt_tokenizer, src_encoder, max_length=512, pooling=False):
         self.src_texts = src_texts
         self.tgt_texts = tgt_texts
         self.max_length = max_length
         self.src_tokenizer = src_tokenizer
         self.tgt_tokenizer = tgt_tokenizer
         self.src_encoder = src_encoder
+        self.pooling = pooling
 
     def __len__(self):
         return len(self.src_texts)
@@ -102,13 +103,17 @@ class SrcTgtDataset(TorchDataset):
         )
         src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
         src_encoder_outputs = self.src_encoder(**src_tokens)
+        if self.pooling:
+            src_encoder_outputs = src_encoder_outputs.pooler_output
+        else:
+            src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
         tgt_tokens = self.tgt_tokenizer(
             tgt_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
         )
         labels = tgt_tokens["input_ids"].clone()
         labels[labels == self.tgt_tokenizer.pad_token_id] = -100
         return dict(
-            encoder_outputs=src_encoder_outputs.last_hidden_state.squeeze(0).detach().cpu(),
+            encoder_outputs=src_encoder_outputs.detach().cpu(),
             encoder_attention_mask=src_tokens["attention_mask"].squeeze(0).detach().cpu(),
             input_ids=tgt_tokens["input_ids"].squeeze(0),
             attention_mask=tgt_tokens["attention_mask"].squeeze(0),
@@ -155,7 +160,7 @@ def compute_metrics(eval_preds):
 
 
 class EnzymeDecoder(torch.nn.Module):
-    def __init__(self, decoder, trie=None,encoder_dim=ENCODER_DIM, bottleneck_dim=0):
+    def __init__(self, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
@@ -169,7 +174,6 @@ class EnzymeDecoder(torch.nn.Module):
             self.encoder_project = torch.nn.Linear(
                 encoder_dim, self.decoder.config.hidden_size
             )
-
 
     def forward(self, input_ids, attention_mask, encoder_outputs, encoder_attention_mask, labels):
         # Encode the input
@@ -219,6 +223,7 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--trie", type=int, default=1)
     parser.add_argument("--bottleneck_dim", type=int, default=0)
+    parser.add_argument("--pooling", type=int, default=0)
     args = parser.parse_args()
 
     src_train, tgt_train, src_test, tgt_test = load_files(level=args.level)
@@ -227,8 +232,8 @@ if __name__ == "__main__":
                                                                                      drugbank=args.level == "drugbank")
 
     # Create datasets and dataloaders
-    train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model)
-    test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model)
+    train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model,pooling=args.pooling)
+    test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model, pooling=args.pooling)
 
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
@@ -244,8 +249,10 @@ if __name__ == "__main__":
         output_dir += "_notrie"
     if args.bottleneck_dim > 0:
         output_dir += f"_bottleneck_{args.bottleneck_dim}"
+    if args.pooling:
+        output_dir += "_pooling"
     if args.level == "drugbank":
-        output_dir=output_dir.replace("results", "results_drugbank")
+        output_dir = output_dir.replace("results", "results_drugbank")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
