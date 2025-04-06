@@ -10,19 +10,19 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 if [ $split_index -eq 0 ]; then
-  python train.py --size "m"
+  python train.py --pooling 0 --bottleneck_dim 0 --size "m" --dropout 0.3
 elif [ $split_index -eq 1 ]; then
-  python train.py --size "l" --dropout 0.2
+  python train.py --pooling 1 --bottleneck_dim 0 --size "m" --dropout 0.3
 elif [ $split_index -eq 2 ]; then
-  python train.py --size "l" --dropout 0.05
+  python train.py --pooling 0 --bottleneck_dim 64 --size "m" --dropout 0.3
 elif [ $split_index -eq 3 ]; then
-  python train.py --size "l" --dropout 0.3
+  python train.py --pooling 1 --bottleneck_dim 64 --size "m" --dropout 0.3
 elif [ $split_index -eq 4 ]; then
-  python train.py --size "m" --dropout 0.0
+  python train.py --pooling 0 --bottleneck_dim 0 --size "m" --dropout 0.5
 elif [ $split_index -eq 5 ]; then
-  python train.py --size "l" --dropout 0.4
+  python train.py --pooling 0 --bottleneck_dim 128 --size "m" --dropout 0.5
 elif [ $split_index -eq 6 ]; then
-  python train.py --size "m" --dropout 0.2
+  python train.py --pooling 1 --bottleneck_dim 0 --size "m" --dropout 0.5
 elif [ $split_index -eq 7 ]; then
-  python train.py --size "l" --dropout 0.0
+  python train.py --pooling 1 --bottleneck_dim 128 --size "m" --dropout 0.5
 fi
