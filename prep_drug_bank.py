@@ -44,9 +44,10 @@ if __name__ == "__main__":
         else:
             test_count = max(int(len(indexes) * 0.1), 1)
             train_count = len(indexes) - test_count
-            print(f"train: {train_count}, test: {test_count}")
             train_indexes = random.sample(indexes, train_count)
             test_indexes = list(set(indexes) - set(train_indexes))
+        print(f"train: {len(train_indexes)}, test: {len(test_indexes)}")
+
         for i in train_indexes:
             train_smiles.append(all_smiles[i])
             train_fasta.append(all_fasta[i])
