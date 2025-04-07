@@ -9,6 +9,8 @@ from os.path import join as pjoin
 import numpy as np
 from torch.nn import CrossEntropyLoss
 import glob
+from transformers import AutoModel
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -18,19 +20,25 @@ num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
 ENCODER_DIM = 256
 
 
-def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False):
-    # Load the pretrained tokenizers
-    if drugbank:
-        from transformers import AutoModel, AutoTokenizer
-        reaction_model = AutoModel.from_pretrained("ibm/MoLFormer-XL-both-10pct", deterministic_eval=True,
-                                                   trust_remote_code=True)
-        reaction_tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False):
+    if gen_mol:
+        assert drugbank, "gen_mol can only be used with drugbank"
+        src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+        src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
+        tgt_tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+    elif drugbank:
+        src_model = AutoModel.from_pretrained("ibm/MoLFormer-XL-both-10pct", deterministic_eval=True,
+                                              trust_remote_code=True)
+
+        src_tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+        tgt_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
     else:
-        reaction_model, reaction_tokenizer = get_model_and_tokenizer()
-    reaction_model.eval().to(device)
-    for param in reaction_model.parameters():
+        src_model, src_tokenizer = get_model_and_tokenizer()
+        tgt_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
+
+    src_model.eval().to(device)
+    for param in src_model.parameters():
         param.requires_grad = False
-    esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t36_3B_UR50D", trust_remote_code=True)
 
     hidden_size = hidden_size_per_size[decoder_size]
     num_hidden_layers = num_layers_per_size[decoder_size]
@@ -39,11 +47,11 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False):
 
     # Load the pretrained decoder
     decoder_config = BertGenerationConfig(
-        vocab_size=len(esm_tokenizer.get_vocab()),
-        eos_token_id=esm_tokenizer.eos_token_id,
-        pad_token_id=esm_tokenizer.pad_token_id,
-        bos_token_id=esm_tokenizer.bos_token_id,
-        decoder_start_token_id=esm_tokenizer.pad_token_id,
+        vocab_size=len(tgt_tokenizer.get_vocab()),
+        eos_token_id=tgt_tokenizer.eos_token_id,
+        pad_token_id=tgt_tokenizer.pad_token_id,
+        bos_token_id=tgt_tokenizer.bos_token_id,
+        decoder_start_token_id=tgt_tokenizer.pad_token_id,
         is_encoder_decoder=True,
         is_decoder=True,
         add_cross_attention=True,
@@ -58,7 +66,7 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False):
     )
     decoder = BertGenerationDecoder(decoder_config)
     decoder.train().to(device)
-    return reaction_model, reaction_tokenizer, decoder, esm_tokenizer
+    return src_model, src_tokenizer, decoder, tgt_tokenizer
 
 
 def load_file(file_path):
@@ -68,7 +76,7 @@ def load_file(file_path):
     return texts
 
 
-def load_files(level="easy"):
+def load_files(level="easy", gen_mol=0):
     """Load training and testing files"""
     base_dir = f"data/{level}/"
 
@@ -78,6 +86,10 @@ def load_files(level="easy"):
     tgt_test = load_file(pjoin(base_dir, "test_enzyme.txt"))
     print(
         f"src_train: {len(src_train)}, tgt_train: {len(tgt_train)}, src_test: {len(src_test)}, tgt_test: {len(tgt_test)}")
+    if gen_mol:
+        assert level == "drugbank"
+        src_train, tgt_train = tgt_train, src_train
+        src_test, tgt_test = tgt_test, src_test
     return src_train, tgt_train, src_test, tgt_test
 
 
@@ -104,7 +116,10 @@ class SrcTgtDataset(TorchDataset):
         src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
         src_encoder_outputs = self.src_encoder(**src_tokens)
         if self.pooling:
-            src_encoder_outputs = src_encoder_outputs.pooler_output
+            if hasattr(self.src_encoder, "pooler_output"):
+                src_encoder_outputs = src_encoder_outputs.pooler_output
+            else:
+                src_encoder_outputs = src_encoder_outputs.last_hidden_state.mean(dim=1)
             src_attention_mask = torch.ones(1).to(device)
         else:
             src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
@@ -227,42 +242,49 @@ if __name__ == "__main__":
     parser.add_argument("--trie", type=int, default=1)
     parser.add_argument("--bottleneck_dim", type=int, default=0)
     parser.add_argument("--pooling", type=int, default=0)
+    parser.add_argument("--gen_mol", type=int, default=0)
     args = parser.parse_args()
 
-    src_train, tgt_train, src_test, tgt_test = load_files(level=args.level)
-    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=args.size,
-                                                                                     dropout=args.dropout,
-                                                                                     drugbank=args.level == "drugbank")
+    src_train, tgt_train, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol)
+    src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
+                                                                           dropout=args.dropout,
+                                                                           drugbank=args.level == "drugbank",
+                                                                           gen_mol=args.gen_mol)
 
     # Create datasets and dataloaders
-    train_dataset = SrcTgtDataset(src_train, tgt_train, reaction_tokenizer, esm_tokenizer, reaction_model,
+    train_dataset = SrcTgtDataset(src_train, tgt_train, src_tokenizer, tgt_tokenizer, src_model,
                                   pooling=args.pooling)
-    test_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model,
+    test_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model,
                                  pooling=args.pooling)
 
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
     if args.trie:
-        trie = build_trie(tgt_train + tgt_test, esm_tokenizer)
+        trie = build_trie(tgt_train + tgt_test, tgt_tokenizer)
     else:
         trie = None
-    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=ENCODER_DIM if args.level != "drugbank" else 768,
+    encoder_dim = ENCODER_DIM
+    if args.level == "drugbank":
+        encoder_dim = 768
+    if args.gen_mol:
+        encoder_dim = 1280
+    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim,
                           bottleneck_dim=args.bottleneck_dim)
 
     if args.level == "drugbank":
         from eval_drug_bank import evaluate_model, get_data
 
-        pos_dataset, neg_dataset, _ = get_data(args.pooling, reaction_model, reaction_tokenizer, esm_tokenizer)
+        pos_dataset, neg_dataset, _ = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
+                                               gen_mol=args.gen_mol)
         compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
-        eval_dataset={"test": test_dataset}
+        eval_dataset = {"test": test_dataset}
         metric_for_best_model = "eval_test_auc"
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)
-        eval_dataset={"test": test_dataset, "train": train_small_dataset},
+        eval_dataset = {"test": test_dataset, "train": train_small_dataset},
         metric_for_best_model = "eval_test_token_accuracy"
-
 
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
     if args.trie == 0:
@@ -271,6 +293,8 @@ if __name__ == "__main__":
         output_dir += f"_bottleneck_{args.bottleneck_dim}"
     if args.pooling:
         output_dir += "_pooling"
+    if args.gen_mol:
+        output_dir += "_mol"
     if args.level == "drugbank":
         output_dir = output_dir.replace("results", "results_drugbank")
     logs_dir = output_dir.replace("results", "logs")

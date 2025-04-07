@@ -16,11 +16,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from sklearn.metrics import roc_auc_score
 
 
-def get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer):
-    src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank")
+def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
+    src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank",gen_mol=gen_mol)
     all_train_fasta = {x for x in tgt_train}
     all_train_smiles = {x for x in src_train}
-    trie = build_trie(list(set(tgt_train + tgt_test)), esm_tokenizer)
+    trie = build_trie(list(set(tgt_train + tgt_test)), tgt_tokenizer)
 
     ignore_indexes = []
     for i in range(len(tgt_test)):
@@ -32,7 +32,7 @@ def get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer):
     src_test = [x for i, x in enumerate(src_test) if i not in ignore_indexes]
     tgt_test = [x for i, x in enumerate(tgt_test) if i not in ignore_indexes]
     print(f"len src_test: {len(src_test)}")
-    pos_dataset = SrcTgtDataset(src_test, tgt_test, reaction_tokenizer, esm_tokenizer, reaction_model, pooling=pooling)
+    pos_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     with open("data/drugbank/DrugBank.txt", "r") as f:
         lines = f.read().splitlines()
     neg_smiles = []
@@ -48,8 +48,9 @@ def get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer):
             continue
         neg_smiles.append(smiles)
         neg_fasta.append(fasta)
-
-    neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, reaction_tokenizer, esm_tokenizer, reaction_model,
+    if gen_mol:
+        neg_smiles, neg_fasta = neg_fasta, neg_smiles
+    neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, src_tokenizer, tgt_tokenizer, src_model,
                                 pooling=pooling)
     return pos_dataset, neg_dataset, trie
 
