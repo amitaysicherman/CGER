@@ -130,7 +130,7 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False):
     if eval_all:
         print(f"AUC: {auc_score:.4f}")
         evaluate_model_all(pos_prob, neg_prob)
-    return auc_score
+    return {"auc",auc_score}
 
 
 def main():
