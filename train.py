@@ -249,6 +249,21 @@ if __name__ == "__main__":
         trie = None
     model = EnzymeDecoder(decoder, trie=trie, encoder_dim=ENCODER_DIM if args.level != "drugbank" else 768,
                           bottleneck_dim=args.bottleneck_dim)
+
+    if args.level == "drugbank":
+        from eval_drug_bank import evaluate_model, get_data
+
+        pos_dataset, neg_dataset, _ = get_data(args.pooling, reaction_model, reaction_tokenizer, esm_tokenizer)
+        compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
+        eval_dataset={"test": test_dataset}
+        metric_for_best_model = "eval_auc"
+
+    else:
+        compute_metrics_func = lambda x: compute_metrics(x)
+        eval_dataset={"test": test_dataset, "train": train_small_dataset},
+        metric_for_best_model = "eval_test_token_accuracy"
+
+
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
     if args.trie == 0:
         output_dir += "_notrie"
@@ -287,8 +302,8 @@ if __name__ == "__main__":
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset={"test": test_dataset, "train": train_small_dataset},
-        compute_metrics=compute_metrics
+        eval_dataset=eval_dataset,
+        compute_metrics=compute_metrics_func
     )
     # Train model
     print("Training model...")
