@@ -256,7 +256,7 @@ if __name__ == "__main__":
         pos_dataset, neg_dataset, _ = get_data(args.pooling, reaction_model, reaction_tokenizer, esm_tokenizer)
         compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
         eval_dataset={"test": test_dataset}
-        metric_for_best_model = "eval_auc"
+        metric_for_best_model = "eval_test_auc"
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)
@@ -291,7 +291,7 @@ if __name__ == "__main__":
         save_steps=args.save_steps,
         lr_scheduler_type="constant",
         load_best_model_at_end=True,
-        metric_for_best_model="eval_test_token_accuracy",
+        metric_for_best_model=metric_for_best_model,
         report_to=[args.report_to],
         save_safetensors=False,
         auto_find_batch_size=True,
