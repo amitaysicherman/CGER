@@ -166,7 +166,8 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
     pos_prob = np.array(pos_prob)
 
     # Sample negative examples to match positive count
-    neg_indices = random.choices(range(len(neg_dataset)), k=len(pos_prob))
+    k=min(len(pos_prob), len(neg_dataset))
+    neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
     neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
 
