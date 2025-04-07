@@ -130,6 +130,7 @@ class SrcTgtDataset(TorchDataset):
         )
         labels = tgt_tokens["input_ids"].clone()
         labels[labels == self.tgt_tokenizer.pad_token_id] = -100
+
         return dict(
             encoder_outputs=src_encoder_outputs.detach().cpu(),
             encoder_attention_mask=src_attention_mask.detach().cpu(),
@@ -275,9 +276,11 @@ if __name__ == "__main__":
     if args.level == "drugbank":
         from eval_drug_bank import evaluate_model, get_data
 
-        pos_dataset, neg_dataset, _ = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
+        pos_dataset, neg_dataset = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                gen_mol=args.gen_mol)
-        compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
+        # compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
+        compute_metrics_func = lambda x: compute_metrics(x)
+
         eval_dataset = {"test": test_dataset}
         metric_for_best_model = "eval_test_auc"
 

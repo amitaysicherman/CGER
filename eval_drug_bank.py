@@ -3,6 +3,7 @@ import torch
 from train import get_encoder_decoder, load_files, SrcTgtDataset, EnzymeDecoder
 from trie import build_trie
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 import numpy as np
 import random
 from tqdm import tqdm
@@ -20,14 +21,14 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
     src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank",gen_mol=gen_mol)
     all_train_fasta = {x for x in tgt_train}
     all_train_smiles = {x for x in src_train}
-    trie = build_trie(list(set(tgt_train + tgt_test)), tgt_tokenizer)
 
-    ignore_indexes = []
+    ignore_indexes = set()
     for i in range(len(tgt_test)):
         if tgt_test[i] not in all_train_fasta:
-            ignore_indexes.append(i)
+            ignore_indexes.add(i)
+            continue
         if src_test[i] not in all_train_smiles:
-            ignore_indexes.append(i)
+            ignore_indexes.add(i)
     print(f"len ignore_indexes: {len(ignore_indexes)}")
     src_test = [x for i, x in enumerate(src_test) if i not in ignore_indexes]
     tgt_test = [x for i, x in enumerate(tgt_test) if i not in ignore_indexes]
@@ -52,25 +53,25 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
         neg_smiles, neg_fasta = neg_fasta, neg_smiles
     neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, src_tokenizer, tgt_tokenizer, src_model,
                                 pooling=pooling)
-    return pos_dataset, neg_dataset, trie
+    return pos_dataset, neg_dataset
 
 
-def get_probabilitiy(model, sample):
-    with torch.no_grad():
-        model.eval()
-        sample = {k: v.to(device) for k, v in sample.items()}
-        sample = {k: v.unsqueeze(0) for k, v in sample.items()}
-        output = model(**sample)
-        all_logits = output["logits"][:, :-1]
-        all_mask_out = output.trie_mask_out
-        input_ids = sample["input_ids"][:, 1:]
-        input_ids = input_ids[~all_mask_out]
-        logits = all_logits[~all_mask_out]
-        log_prob = F.log_softmax(logits, dim=-1)
-        log_prob = [log_prob[i, input_ids[i]].item() for i in range(len(input_ids))]
-        log_prob_mean = np.mean(log_prob)
-        prob = np.exp(log_prob_mean)
-        return prob
+# def get_probabilitiy(model, sample):
+#     with torch.no_grad():
+#         model.eval()
+#         sample = {k: v.to(device) for k, v in sample.items()}
+#         sample = {k: v.unsqueeze(0) for k, v in sample.items()}
+#         output = model(**sample)
+#         all_logits = output["logits"][:, :-1]
+#         all_mask_out = output.trie_mask_out
+#         input_ids = sample["input_ids"][:, 1:]
+#         input_ids = input_ids[~all_mask_out]
+#         logits = all_logits[~all_mask_out]
+#         log_prob = F.log_softmax(logits, dim=-1)
+#         log_prob = [log_prob[i, input_ids[i]].item() for i in range(len(input_ids))]
+#         log_prob_mean = np.mean(log_prob)
+#         prob = np.exp(log_prob_mean)
+#         return prob
 
 
 def calculate_metrics(y_true, y_pred):
@@ -110,20 +111,73 @@ def evaluate_model_all(pos_prob, neg_prob):
         f"Best F1: {best_f1:.4f}, Best Precision: {best_precision:.4f}, Best Recall: {best_recall:.4f}, Best Accuracy: {best_acc:.4f}")
 
 
-def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False):
+# def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False):
+#     pos_prob = []
+#     for line_index, test_data in tqdm(enumerate(pos_dataset)):
+#         prob = get_probabilitiy(model, test_data)
+#         pos_prob.append(prob)
+#     pos_prob = np.array(pos_prob)
+#
+#     neg_prob = []
+#     neg_index = random.choices(range(len(neg_dataset)), k=len(pos_prob))
+#     for line_index in tqdm(neg_index):
+#         test_data = neg_dataset[line_index]
+#         prob = get_probabilitiy(model, test_data)
+#         neg_prob.append(prob)
+#     neg_prob = np.array(neg_prob)
+#     y_true = np.concatenate([np.ones(len(pos_prob)), np.zeros(len(neg_prob))])
+#     y_scores = np.concatenate([pos_prob, neg_prob])
+#     auc_score = roc_auc_score(y_true, y_scores)
+#
+#     if eval_all:
+#         print(f"AUC: {auc_score:.4f}")
+#         evaluate_model_all(pos_prob, neg_prob)
+#     return {"auc":auc_score}
+def get_batch_probabilities(model, batch):
+    with torch.no_grad():
+        model.eval()
+        batch = {k: v.to(device) for k, v in batch.items()}
+        output = model(**batch)
+        all_logits = output["logits"][:, :-1]
+        all_mask_out = output.trie_mask_out
+        input_ids = batch["input_ids"][:, 1:]
+
+        batch_probs = []
+        for idx in range(len(input_ids)):
+            sample_logits = all_logits[idx][~all_mask_out[idx]]
+            sample_ids = input_ids[idx][~all_mask_out[idx]]
+
+            log_prob = F.log_softmax(sample_logits, dim=-1)
+            token_log_probs = [log_prob[i, sample_ids[i]].item() for i in range(len(sample_ids))]
+            log_prob_mean = np.mean(token_log_probs)
+            prob = np.exp(log_prob_mean)
+            batch_probs.append(prob)
+
+        return batch_probs
+
+def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=32):
+    # Process positive examples in batches
     pos_prob = []
-    for line_index, test_data in tqdm(enumerate(pos_dataset)):
-        prob = get_probabilitiy(model, test_data)
-        pos_prob.append(prob)
+    pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
+
+    for batch in tqdm(pos_dataloader):
+        batch_probs = get_batch_probabilities(model, batch)
+        pos_prob.extend(batch_probs)
     pos_prob = np.array(pos_prob)
 
+    # Sample negative examples to match positive count
+    neg_indices = random.choices(range(len(neg_dataset)), k=len(pos_prob))
+    neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
+    neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
+
+    # Process negative examples in batches
     neg_prob = []
-    neg_index = random.choices(range(len(neg_dataset)), k=len(pos_prob))
-    for line_index in tqdm(neg_index):
-        test_data = neg_dataset[line_index]
-        prob = get_probabilitiy(model, test_data)
-        neg_prob.append(prob)
+    for batch in tqdm(neg_dataloader):
+        batch_probs = get_batch_probabilities(model, batch)
+        neg_prob.extend(batch_probs)
     neg_prob = np.array(neg_prob)
+
+    # Calculate metrics
     y_true = np.concatenate([np.ones(len(pos_prob)), np.zeros(len(neg_prob))])
     y_scores = np.concatenate([pos_prob, neg_prob])
     auc_score = roc_auc_score(y_true, y_scores)
@@ -131,45 +185,5 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False):
     if eval_all:
         print(f"AUC: {auc_score:.4f}")
         evaluate_model_all(pos_prob, neg_prob)
-    return {"auc":auc_score}
 
-
-def main():
-    size = "m"
-    dropout = 0.3
-    pooling = False
-    bottleneck_dim = 0
-    learning_rate = 0.0001
-    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
-                                                                                     drugbank=True)
-
-    pos_dataset, neg_dataset, trie = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer)
-    reaction_model.to(device).eval()
-    decoder.to(device).eval()
-
-    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=768, bottleneck_dim=bottleneck_dim)
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of parameters in the model: {n_params:,}")
-
-    output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
-    if bottleneck_dim > 0:
-        output_dir += f"_bottleneck_{bottleneck_dim}"
-    if pooling:
-        output_dir += "_pooling"
-
-    model_path = f"results_drugbank/{output_dir}/"
-    all_cp_dirs = [os.path.join(model_path, d) for d in os.listdir(model_path) if
-                   os.path.isdir(os.path.join(model_path, d)) and d.startswith("checkpoint")]
-    all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
-    last_cp_dir = all_cp_dirs[-1]
-    model_path = f"{last_cp_dir}/pytorch_model.bin"
-
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval().to(device)
-    print(f"Model loaded from {model_path}")
-
-    print(evaluate_model(pos_dataset, neg_dataset, model, eval_all=True))
-
-
-if __name__ == "__main__":
-    main()
+    return {"auc": auc_score}
