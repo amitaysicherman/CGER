@@ -40,6 +40,8 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
     neg_fasta = []
     for i, line in enumerate(lines):
         _, __, smiles, fasta, label = line.split(" ")
+        if gen_mol:
+            smiles, fasta = fasta, smiles
         label = int(label)
         if label == 1:
             continue
@@ -49,8 +51,6 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
             continue
         neg_smiles.append(smiles)
         neg_fasta.append(fasta)
-    if gen_mol:
-        neg_smiles, neg_fasta = neg_fasta, neg_smiles
     neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, src_tokenizer, tgt_tokenizer, src_model,
                                 pooling=pooling)
     return pos_dataset, neg_dataset
