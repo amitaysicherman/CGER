@@ -213,9 +213,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--log_dir", type=str, default="logs")
-    parser.add_argument("--log_steps", type=int, default=500)
-    parser.add_argument("--eval_steps", type=int, default=1000)
-    parser.add_argument("--save_steps", type=int, default=1000)
+    parser.add_argument("--log_steps", type=int, default=100)
+    parser.add_argument("--eval_steps", type=int, default=250)
+    parser.add_argument("--save_steps", type=int, default=250)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
