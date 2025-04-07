@@ -45,10 +45,12 @@ class Trie:
 
 def build_trie(word_list, tokenizer, max_length=512):
     tokens_list = []
+    eos= tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.vocab["<eos>"]
     for word in word_list:
         tokens = tokenizer.encode(word, add_special_tokens=True)
+
         if len(tokens) > max_length:
-            tokens = tokens[:max_length-1]+[tokenizer.eos_token_id]
+            tokens = tokens[:max_length-1]+[eos]
         tokens_list.append(tokens)
     return Trie(tokens_list, empty_token=tokenizer.pad_token_id)
 
