@@ -17,7 +17,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from sklearn.metrics import roc_auc_score
 
 
-def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol,return_files=False):
+def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False):
     src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
     all_train_fasta = {x for x in tgt_train}
     all_train_smiles = {x for x in src_train}
@@ -54,7 +54,7 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol,return_fi
     neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, src_tokenizer, tgt_tokenizer, src_model,
                                 pooling=pooling)
     if return_files:
-        return pos_dataset, neg_dataset, list(set(tgt_train+tgt_test))
+        return pos_dataset, neg_dataset, list(set(tgt_train + tgt_test))
     return pos_dataset, neg_dataset
 
 
@@ -193,6 +193,19 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
     return {"auc": auc_score}
 
 
+def get_best_cp(base_path):
+    all_cp_dirs = [os.path.join(base_path, d) for d in os.listdir(base_path) if
+                   os.path.isdir(os.path.join(base_path, d)) and d.startswith("checkpoint")]
+    all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
+    last_cp_dir = all_cp_dirs[-1]
+    import json
+    with open(os.path.join(last_cp_dir, "trainer_state.json"), "r") as f:
+        trainer_state = json.load(f)
+    best_cp_dir = trainer_state["best_model_checkpoint"]
+    model_path = f"{best_cp_dir}/pytorch_model.bin"
+    return model_path
+
+
 def main():
     size = "l"
     dropout = 0.0
@@ -204,9 +217,10 @@ def main():
     reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
                                                                                      drugbank=True, gen_mol=mol)
 
-    pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer, gen_mol=mol,
+    pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer,
+                                                    gen_mol=mol,
                                                     return_files=True)
-    trie= build_trie(trie_files, esm_tokenizer, max_length=512)
+    trie = build_trie(trie_files, esm_tokenizer, max_length=512)
     reaction_model.to(device).eval()
     decoder.to(device).eval()
     encoder_dim = 768 if not mol else 1280
@@ -223,12 +237,12 @@ def main():
         output_dir += "_mol"
 
     model_path = f"results_drugbank/{output_dir}/"
-    all_cp_dirs = [os.path.join(model_path, d) for d in os.listdir(model_path) if
-                   os.path.isdir(os.path.join(model_path, d)) and d.startswith("checkpoint")]
-    all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
-    last_cp_dir = all_cp_dirs[-1]
-    model_path = f"{last_cp_dir}/pytorch_model.bin"
-
+    # all_cp_dirs = [os.path.join(model_path, d) for d in os.listdir(model_path) if
+    #                os.path.isdir(os.path.join(model_path, d)) and d.startswith("checkpoint")]
+    # all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
+    # last_cp_dir = all_cp_dirs[-1]
+    # model_path = f"{last_cp_dir}/pytorch_model.bin"
+    model_path = get_best_cp(model_path)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval().to(device)
     print(f"Model loaded from {model_path}")
