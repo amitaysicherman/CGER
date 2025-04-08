@@ -210,7 +210,7 @@ def main():
     size = "l"
     dropout = 0.0
     pooling = True
-    bottleneck_dim = 0
+    bottleneck_dim = 128
     learning_rate = 0.0001
     mol = True
 
