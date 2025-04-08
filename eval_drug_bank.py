@@ -18,7 +18,7 @@ from sklearn.metrics import roc_auc_score
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol):
-    src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank",gen_mol=gen_mol)
+    src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
     all_train_fasta = {x for x in tgt_train}
     all_train_smiles = {x for x in src_train}
 
@@ -155,6 +155,7 @@ def get_batch_probabilities(model, batch):
 
         return batch_probs
 
+
 def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=32):
     # Process positive examples in batches
     pos_prob = []
@@ -166,7 +167,7 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
     pos_prob = np.array(pos_prob)
 
     # Sample negative examples to match positive count
-    k=min(len(pos_prob), len(neg_dataset))
+    k = min(len(pos_prob), len(neg_dataset))
     neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
     neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
@@ -188,3 +189,48 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
         evaluate_model_all(pos_prob, neg_prob)
 
     return {"auc": auc_score}
+
+
+def main():
+    size = "l"
+    dropout = 0.1
+    pooling = True
+    bottleneck_dim = 0
+    learning_rate = 0.0001
+    mol = True
+
+    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
+                                                                                     drugbank=True, gen_mol=mol)
+
+    pos_dataset, neg_dataset, trie = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer, gen_mol=mol)
+    reaction_model.to(device).eval()
+    decoder.to(device).eval()
+    encoder_dim = 768 if not mol else 1280
+    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of parameters in the model: {n_params:,}")
+
+    output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
+    if bottleneck_dim > 0:
+        output_dir += f"_bottleneck_{bottleneck_dim}"
+    if pooling:
+        output_dir += "_pooling"
+    if mol:
+        output_dir += "_mol"
+
+    model_path = f"results_drugbank/{output_dir}/"
+    all_cp_dirs = [os.path.join(model_path, d) for d in os.listdir(model_path) if
+                   os.path.isdir(os.path.join(model_path, d)) and d.startswith("checkpoint")]
+    all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
+    last_cp_dir = all_cp_dirs[-1]
+    model_path = f"{last_cp_dir}/pytorch_model.bin"
+
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval().to(device)
+    print(f"Model loaded from {model_path}")
+
+    print(evaluate_model(pos_dataset, neg_dataset, model, eval_all=True, batch_size=1))
+
+
+if __name__ == "__main__":
+    main()

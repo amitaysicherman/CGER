@@ -10,6 +10,7 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.0 --epochs 100"
 "python train.py --pooling 0 --bottleneck_dim 0 --size 'l' --dropout 0.0 --epochs 20"
 "python train.py --pooling 0 --bottleneck_dim 0 --size 'l' --dropout 0.2 --epochs 20"
 "python train.py --pooling 0 --bottleneck_dim 0 --size 'l' --dropout 0.4 --epochs 20"
