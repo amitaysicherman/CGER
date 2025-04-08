@@ -61,10 +61,10 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
         if gen_mol:
             src, tgt = tgt, src
         if src not in all_train_src:
-            print(f"src {src} not in all_train_src")
+            # print(f"src {src} not in all_train_src")
             continue
         if tgt not in all_train_tgt:
-            print(f"tgt {tgt} not in all_train_tgt")
+            # print(f"tgt {tgt} not in all_train_tgt")
             continue
         neg_src.append(src)
         neg_tgt.append(tgt)
