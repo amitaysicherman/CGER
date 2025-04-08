@@ -15,19 +15,31 @@ from sklearn.metrics import f1_score
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from sklearn.metrics import roc_auc_score
+from rdkit import Chem
+from rdkit import RDLogger
+
+RDLogger.DisableLog('rdApp.*')
+
+
+def remove_stereo_mol(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return smiles
+    Chem.RemoveStereochemistry(mol)
+    return Chem.MolToSmiles(mol, canonical=True)
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False):
     src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
-    all_train_fasta = {x for x in tgt_train}
-    all_train_smiles = {x for x in src_train}
+    all_train_src = {x for x in src_train}
+    all_train_tgt = {x for x in tgt_train}
 
     ignore_indexes = set()
     for i in range(len(tgt_test)):
-        if tgt_test[i] not in all_train_fasta:
+        if tgt_test[i] not in all_train_tgt:
             ignore_indexes.add(i)
             continue
-        if src_test[i] not in all_train_smiles:
+        if src_test[i] not in all_train_src:
             ignore_indexes.add(i)
     print(f"len ignore_indexes: {len(ignore_indexes)}")
     src_test = [x for i, x in enumerate(src_test) if i not in ignore_indexes]
@@ -36,22 +48,27 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
     pos_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     with open("data/drugbank/DrugBank.txt", "r") as f:
         lines = f.read().splitlines()
-    neg_smiles = []
-    neg_fasta = []
+    neg_src = []
+    neg_tgt = []
     for i, line in enumerate(lines):
-        _, __, smiles, fasta, label = line.split(" ")
-        if gen_mol:
-            smiles, fasta = fasta, smiles
+        _, __, src, tgt, label = line.split(" ")
         label = int(label)
         if label == 1:
             continue
-        if smiles not in all_train_smiles:
+
+        src = remove_stereo_mol(src)
+
+        if gen_mol:
+            src, tgt = tgt, src
+        if src not in all_train_src:
+            print(f"src {src} not in all_train_src")
             continue
-        if fasta not in all_train_fasta:
+        if tgt not in all_train_tgt:
+            print(f"tgt {tgt} not in all_train_tgt")
             continue
-        neg_smiles.append(smiles)
-        neg_fasta.append(fasta)
-    neg_dataset = SrcTgtDataset(neg_smiles, neg_fasta, src_tokenizer, tgt_tokenizer, src_model,
+        neg_src.append(src)
+        neg_tgt.append(tgt)
+    neg_dataset = SrcTgtDataset(neg_src, neg_tgt, src_tokenizer, tgt_tokenizer, src_model,
                                 pooling=pooling)
     if return_files:
         return pos_dataset, neg_dataset, list(set(tgt_train + tgt_test))
@@ -159,22 +176,20 @@ def get_batch_probabilities(model, batch):
 
 
 def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=32):
-    # Process positive examples in batches
-    pos_prob = []
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
+    print(f"Number of positive examples: {len(pos_dataloader)}")
+    print(f"Number of negative examples: {len(neg_dataset)}")
+    # k = min(len(pos_dataloader), len(neg_dataset))
+    # neg_indices = random.choices(range(len(neg_dataset)), k=k)
+    # neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
+    neg_dataloader = DataLoader(neg_dataset, batch_size=batch_size, shuffle=False)
+
+    pos_prob = []
 
     for batch in tqdm(pos_dataloader):
         batch_probs = get_batch_probabilities(model, batch)
         pos_prob.extend(batch_probs)
     pos_prob = np.array(pos_prob)
-
-    # Sample negative examples to match positive count
-    print(f"Number of positive examples: {len(pos_prob)}")
-    print(f"Number of negative examples: {len(neg_dataset)}")
-    k = min(len(pos_prob), len(neg_dataset))
-    neg_indices = random.choices(range(len(neg_dataset)), k=k)
-    neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
-    neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
 
     # Process negative examples in batches
     neg_prob = []
