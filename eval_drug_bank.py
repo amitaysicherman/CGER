@@ -169,6 +169,8 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
     pos_prob = np.array(pos_prob)
 
     # Sample negative examples to match positive count
+    print(f"Number of positive examples: {len(pos_prob)}")
+    print(f"Number of negative examples: {len(neg_dataset)}")
     k = min(len(pos_prob), len(neg_dataset))
     neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
