@@ -82,15 +82,19 @@ def load_files(level="easy", gen_mol=0):
 
     src_train = load_file(pjoin(base_dir, "train_reaction.txt"))
     tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt"))
+    src_valid = load_file(pjoin(base_dir, "valid_reaction.txt"))
+    tgt_valid = load_file(pjoin(base_dir, "valid_enzyme.txt"))
     src_test = load_file(pjoin(base_dir, "test_reaction.txt"))
     tgt_test = load_file(pjoin(base_dir, "test_enzyme.txt"))
-    print(
-        f"src_train: {len(src_train)}, tgt_train: {len(tgt_train)}, src_test: {len(src_test)}, tgt_test: {len(tgt_test)}")
+    print(f"src_train: {len(src_train)}, tgt_train: {len(tgt_train)}")
+    print(f"src_valid: {len(src_valid)}, tgt_valid: {len(tgt_valid)}")
+    print(f"src_test: {len(src_test)}, tgt_test: {len(tgt_test)}")
     if gen_mol:
         assert level == "drugbank"
         src_train, tgt_train = tgt_train, src_train
+        src_valid, tgt_valid = tgt_valid, src_valid
         src_test, tgt_test = tgt_test, src_test
-    return src_train, tgt_train, src_test, tgt_test
+    return src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test
 
 
 class SrcTgtDataset(TorchDataset):
@@ -224,6 +228,12 @@ class EnzymeDecoder(torch.nn.Module):
         return decoder_outputs
 
 
+def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model):
+    auc_valid = evaluate_model(pos_valid, neg_valid, model)
+    auc_test = evaluate_model(pos_test, neg_test, model)
+    return {"auc": auc_valid, "auc_test": auc_test}
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -246,7 +256,7 @@ if __name__ == "__main__":
     parser.add_argument("--gen_mol", type=int, default=0)
     args = parser.parse_args()
 
-    src_train, tgt_train, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol)
+    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol)
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level == "drugbank",
@@ -254,6 +264,8 @@ if __name__ == "__main__":
 
     # Create datasets and dataloaders
     train_dataset = SrcTgtDataset(src_train, tgt_train, src_tokenizer, tgt_tokenizer, src_model,
+                                  pooling=args.pooling)
+    valid_dataset = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model,
                                   pooling=args.pooling)
     test_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model,
                                  pooling=args.pooling)
@@ -276,12 +288,15 @@ if __name__ == "__main__":
     if args.level == "drugbank":
         from eval_drug_bank import evaluate_model, get_data
 
-        pos_dataset, neg_dataset = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
-                                               gen_mol=args.gen_mol)
-        compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model)
+        pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
+                                                            gen_mol=args.gen_mol)
 
-        eval_dataset = {"test": test_dataset}
-        metric_for_best_model = "eval_test_auc"
+        compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
+
+        # subset with size 1, run the script
+        test_dataset_dummy = torch.utils.data.Subset(test_dataset, [0])
+        eval_dataset = {"valid": test_dataset_dummy}
+        metric_for_best_model = "eval_valid_auc"
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)

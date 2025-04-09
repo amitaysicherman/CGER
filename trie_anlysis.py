@@ -9,8 +9,8 @@ import torch
 # set plt backend
 # plt.switch_backend('TkAgg')
 
-src_train, tgt_train, src_test, tgt_test = load_files(level="easy")
-inputs = list(set(tgt_train + tgt_test))
+src_train, tgt_train, *_ = load_files(level="easy")
+inputs = list(set(tgt_train))
 
 esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t36_3B_UR50D", trust_remote_code=True)
 trie = build_trie(inputs, esm_tokenizer)

@@ -29,50 +29,28 @@ def remove_stereo_mol(smiles):
     return Chem.MolToSmiles(mol, canonical=True)
 
 
+def load_negative_files(split, mol):
+    with open(f"data/drugbank/{split}_reaction_neg.txt", "r") as f:
+        src = f.read().splitlines()
+    with open(f"data/drugbank/{split}_enzyme_neg.txt", "r") as f:
+        tgt = f.read().splitlines()
+    if mol:
+        src, tgt = tgt, src
+    return src, tgt
+
+
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False):
-    src_train, tgt_train, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
-    all_train_src = {x for x in src_train}
-    all_train_tgt = {x for x in tgt_train}
+    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
+    pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
-    ignore_indexes = set()
-    for i in range(len(tgt_test)):
-        if tgt_test[i] not in all_train_tgt:
-            ignore_indexes.add(i)
-            continue
-        if src_test[i] not in all_train_src:
-            ignore_indexes.add(i)
-    print(f"len ignore_indexes: {len(ignore_indexes)}")
-    src_test = [x for i, x in enumerate(src_test) if i not in ignore_indexes]
-    tgt_test = [x for i, x in enumerate(tgt_test) if i not in ignore_indexes]
-    print(f"len src_test: {len(src_test)}")
-    pos_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
-    with open("data/drugbank/DrugBank.txt", "r") as f:
-        lines = f.read().splitlines()
-    neg_src = []
-    neg_tgt = []
-    for i, line in enumerate(lines):
-        _, __, src, tgt, label = line.split(" ")
-        label = int(label)
-        if label == 1:
-            continue
+    src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol)
 
-        src = remove_stereo_mol(src)
+    src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol)
+    neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    return pos_valid, neg_valid, pos_test, neg_test
 
-        if gen_mol:
-            src, tgt = tgt, src
-        if src not in all_train_src:
-            # print(f"src {src} not in all_train_src")
-            continue
-        if tgt not in all_train_tgt:
-            # print(f"tgt {tgt} not in all_train_tgt")
-            continue
-        neg_src.append(src)
-        neg_tgt.append(tgt)
-    neg_dataset = SrcTgtDataset(neg_src, neg_tgt, src_tokenizer, tgt_tokenizer, src_model,
-                                pooling=pooling)
-    if return_files:
-        return pos_dataset, neg_dataset, list(set(tgt_train + tgt_test))
-    return pos_dataset, neg_dataset
 
 
 # def get_probabilitiy(model, sample):
@@ -175,7 +153,7 @@ def get_batch_probabilities(model, batch):
         return batch_probs
 
 
-def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32,return_prob=False):
+def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataloader) * batch_size}")
     print(f"Number of negative examples: {len(neg_dataset) * batch_size}")
@@ -205,7 +183,7 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32,return_prob=Fa
         return y_true, y_scores
     auc_score = roc_auc_score(y_true, y_scores)
 
-    return {"auc": auc_score}
+    return auc_score
 
 
 def get_best_cp(base_path):
@@ -220,7 +198,10 @@ def get_best_cp(base_path):
     model_path = f"{best_cp_dir}/pytorch_model.bin"
     return model_path
 
+
 from dataclasses import dataclass
+
+
 @dataclass
 class Config:
     size: str = "l"
@@ -233,16 +214,17 @@ class Config:
     def to_list(self):
         return [self.size, self.dropout, self.pooling, self.bottleneck_dim, self.learning_rate, self.mol]
 
-def main():
 
-    cong1= Config("l", 0.0, True, 128, 0.0001, True)
-    cong2= Config("l", 0.0, True, 128, 0.0001, False)
+def main():
+    cong1 = Config("l", 0.0, True, 128, 0.0001, True)
+    cong2 = Config("l", 0.0, True, 128, 0.0001, False)
 
     all_scores = []
     all_true = []
     for cong in [cong1, cong2]:
         size, dropout, pooling, bottleneck_dim, learning_rate, mol = cong.to_list()
-        reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
+        reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size,
+                                                                                         dropout=dropout,
                                                                                          drugbank=True, gen_mol=mol)
 
         pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer,
@@ -272,10 +254,10 @@ def main():
         y_true, y_scores = evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=True)
         all_scores.append(y_scores)
         all_true.append(y_true)
-    assert (all_true[0]==all_true[1]).all()
+    assert (all_true[0] == all_true[1]).all()
     all_scores = np.stack(all_scores)
     y_true = all_true[0]
-    auc=roc_auc_score(y_true, all_scores.sum(axis=0))
+    auc = roc_auc_score(y_true, all_scores.sum(axis=0))
 
 
 if __name__ == "__main__":
