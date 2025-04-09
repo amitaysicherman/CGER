@@ -106,6 +106,7 @@ class SrcTgtDataset(TorchDataset):
         self.tgt_tokenizer = tgt_tokenizer
         self.src_encoder = src_encoder
         self.pooling = pooling
+        self.memory = {}
 
     def __len__(self):
         return len(self.src_texts)
@@ -113,21 +114,25 @@ class SrcTgtDataset(TorchDataset):
     def __getitem__(self, idx):
         src_text = self.src_texts[idx]
         tgt_text = self.tgt_texts[idx]
-
-        src_tokens = self.src_tokenizer(
-            src_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
-        )
-        src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
-        src_encoder_outputs = self.src_encoder(**src_tokens)
-        if self.pooling:
-            if hasattr(self.src_encoder, "pooler_output"):
-                src_encoder_outputs = src_encoder_outputs.pooler_output
-            else:
-                src_encoder_outputs = src_encoder_outputs.last_hidden_state.mean(dim=1)
-            src_attention_mask = torch.ones(1).to(device)
+        if src_text in self.memory:
+            src_encoder_outputs, src_attention_mask = self.memory[src_text]
         else:
-            src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
-            src_attention_mask = src_tokens["attention_mask"].squeeze(0)
+            src_tokens = self.src_tokenizer(
+                src_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
+            )
+            src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
+
+            src_encoder_outputs = self.src_encoder(**src_tokens)
+            if self.pooling:
+                if hasattr(self.src_encoder, "pooler_output"):
+                    src_encoder_outputs = src_encoder_outputs.pooler_output
+                else:
+                    src_encoder_outputs = src_encoder_outputs.last_hidden_state.mean(dim=1)
+                src_attention_mask = torch.ones(1).to(device)
+            else:
+                src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
+                src_attention_mask = src_tokens["attention_mask"].squeeze(0)
+            self.memory[src_text] = (src_encoder_outputs, src_attention_mask)
 
         tgt_tokens = self.tgt_tokenizer(
             tgt_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
