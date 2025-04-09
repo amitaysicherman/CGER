@@ -122,7 +122,7 @@ def split_to_dataset(split):
         enzymes = f.read().splitlines()
     assert len(reactions) == len(enzymes)
     for i in range(len(reactions)):
-        lines.append(f"- - {reactions[i]} {enzymes[i]} 0\n")
+        lines.append(f"- - {reactions[i]} {enzymes[i]} 0")
     random.shuffle(lines)
     return lines
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
     Loss = nn.CrossEntropyLoss()
     # print(model)
 
-    save_path = "./" + DATASET + "/" + hp.model_name + "/"
+    save_path = "./" + DATASET
     note = ''
     writer = SummaryWriter(log_dir=save_path, comment=note)
 
