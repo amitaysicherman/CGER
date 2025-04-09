@@ -234,9 +234,13 @@ class EnzymeDecoder(torch.nn.Module):
 
 
 def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model):
-    auc_valid = evaluate_model(pos_valid, neg_valid, model)
-    auc_test = evaluate_model(pos_test, neg_test, model)
-    return {"auc": auc_valid, "auc_test": auc_test}
+    auc_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1 = evaluate_model(pos_valid,
+                                                                                                     neg_valid, model)
+    test_auc_score, _, test_best_acc_score, _, test_best_score_f1 = evaluate_model(pos_test, neg_test, model,
+                                                                                   best_acc_threshold=best_acc_threshold,
+                                                                                   best_f1_threshold=best_f1_threshold)
+    return {"auc": auc_score, "auc_test": test_auc_score, "acc": best_acc_score, "f1": best_score_f1,
+            "acc_test": test_best_acc_score, "f1_test": test_best_score_f1}
 
 
 if __name__ == "__main__":

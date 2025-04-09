@@ -14,7 +14,7 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score
 from rdkit import Chem
 from rdkit import RDLogger
 
@@ -152,8 +152,28 @@ def get_batch_probabilities(model, batch):
 
         return batch_probs
 
+def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
+    """Find the optimal threshold for either accuracy or F1 score"""
+    thresholds = np.unique(y_scores)
+    best_threshold = 0
+    best_score = 0
 
-def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False):
+    for threshold in thresholds:
+        y_pred = (np.array(y_scores) >= threshold).astype(int)
+
+        if metric == 'accuracy':
+            score = accuracy_score(y_true, y_pred)
+        elif metric == 'f1':
+            score = f1_score(y_true, y_pred)
+
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+
+    return best_threshold, best_score
+
+
+def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False,best_acc_threshold=None,best_f1_threshold=None):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataset)}")
     print(f"Number of negative examples: {len(neg_dataset)}")
@@ -181,9 +201,18 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
     y_scores = np.concatenate([pos_prob, neg_prob])
     if return_prob:
         return y_true, y_scores
-    auc_score = roc_auc_score(y_true, y_scores)
 
-    return auc_score
+
+    auc_score = roc_auc_score(y_true, y_scores)
+    if best_acc_threshold is None:
+        best_acc_threshold, best_acc_score = find_optimal_threshold(y_true, y_scores, metric='accuracy')
+    else:
+        best_acc_score = accuracy_score(y_true, (y_scores >= best_acc_threshold).astype(int))
+    if best_f1_threshold is None:
+        best_threshold_f1, best_score_f1 = find_optimal_threshold(y_true, y_scores, metric='f1')
+    else:
+        best_score_f1 = f1_score(y_true, (y_scores >= best_f1_threshold).astype(int))
+    return auc_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1
 
 
 def get_best_cp(base_path):

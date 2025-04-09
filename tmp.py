@@ -2,6 +2,7 @@
 """
 @Time:Created on 2020/7/05
 @author: Qichang Zhao
+Modified to include test set evaluation in each epoch and use optimal thresholds
 """
 import random
 import os
@@ -19,28 +20,24 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, recall_score, precision_recall_curve, auc
-DATASET="DRUGBANK"
+from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, precision_recall_curve, auc
 
-def show_result(DATASET, lable, Accuracy_List, Precision_List, Recall_List, AUC_List, AUPR_List):
+DATASET = "DRUGBANK"
+
+
+def show_result(DATASET, lable, Accuracy_List, F1_List, AUC_List):
     Accuracy_mean, Accuracy_var = np.mean(Accuracy_List), np.var(Accuracy_List)
-    Precision_mean, Precision_var = np.mean(Precision_List), np.var(Precision_List)
-    Recall_mean, Recall_var = np.mean(Recall_List), np.var(Recall_List)
+    F1_mean, F1_var = np.mean(F1_List), np.var(F1_List)
     AUC_mean, AUC_var = np.mean(AUC_List), np.var(AUC_List)
-    PRC_mean, PRC_var = np.mean(AUPR_List), np.var(AUPR_List)
     print("The {} model's results:".format(lable))
     with open("./{}/results.txt".format(DATASET), 'w') as f:
         f.write('Accuracy(std):{:.4f}({:.4f})'.format(Accuracy_mean, Accuracy_var) + '\n')
-        f.write('Precision(std):{:.4f}({:.4f})'.format(Precision_mean, Precision_var) + '\n')
-        f.write('Recall(std):{:.4f}({:.4f})'.format(Recall_mean, Recall_var) + '\n')
+        f.write('F1(std):{:.4f}({:.4f})'.format(F1_mean, F1_var) + '\n')
         f.write('AUC(std):{:.4f}({:.4f})'.format(AUC_mean, AUC_var) + '\n')
-        f.write('PRC(std):{:.4f}({:.4f})'.format(PRC_mean, PRC_var) + '\n')
 
     print('Accuracy(std):{:.4f}({:.4f})'.format(Accuracy_mean, Accuracy_var))
-    print('Precision(std):{:.4f}({:.4f})'.format(Precision_mean, Precision_var))
-    print('Recall(std):{:.4f}({:.4f})'.format(Recall_mean, Recall_var))
+    print('F1(std):{:.4f}({:.4f})'.format(F1_mean, F1_var))
     print('AUC(std):{:.4f}({:.4f})'.format(AUC_mean, AUC_var))
-    print('PRC(std):{:.4f}({:.4f})'.format(PRC_mean, PRC_var))
 
 
 def load_tensor(file_name, dtype):
@@ -48,11 +45,49 @@ def load_tensor(file_name, dtype):
     return [dtype(d) for d in np.load(file_name + '.npy', allow_pickle=True)]
 
 
-def test_precess(model, pbar, LOSS):
+def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
+    """Find the optimal threshold for either accuracy or F1 score"""
+    thresholds = np.unique(y_scores)
+    best_threshold = 0
+    best_score = 0
+
+    for threshold in thresholds:
+        y_pred = (np.array(y_scores) >= threshold).astype(int)
+
+        if metric == 'accuracy':
+            score = accuracy_score(y_true, y_pred)
+        elif metric == 'f1':
+            score = f1_score(y_true, y_pred)
+
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+
+    return best_threshold, best_score
+
+
+def evaluate_with_threshold(y_true, y_scores, acc_threshold, f1_threshold):
+    """Evaluate performance using optimal thresholds for accuracy and F1"""
+    # For AUC
+    auc_score = roc_auc_score(y_true, y_scores)
+
+    # For accuracy
+    y_pred_acc = (np.array(y_scores) >= acc_threshold).astype(int)
+    accuracy = accuracy_score(y_true, y_pred_acc)
+
+    # For F1
+    y_pred_f1 = (np.array(y_scores) >= f1_threshold).astype(int)
+    f1 = f1_score(y_true, y_pred_f1)
+
+    return auc_score, accuracy, f1
+
+
+def test_precess(model, data_loader, LOSS, acc_threshold=0.5, f1_threshold=0.5):
     model.eval()
     test_losses = []
-    Y, P, S = [], [], []
+    Y, S = [], []
     with torch.no_grad():
+        pbar = tqdm(enumerate(BackgroundGenerator(data_loader)), total=len(data_loader))
         for i, data in pbar:
             '''data preparation '''
             compounds, proteins, labels = data
@@ -64,49 +99,30 @@ def test_precess(model, pbar, LOSS):
             loss = LOSS(predicted_scores, labels)
             correct_labels = labels.to('cpu').data.numpy()
             predicted_scores = F.softmax(predicted_scores, 1).to('cpu').data.numpy()
-            predicted_labels = np.argmax(predicted_scores, axis=1)
-            predicted_scores = predicted_scores[:, 1]
+            predicted_scores = predicted_scores[:, 1]  # Get probability for positive class
 
             Y.extend(correct_labels)
-            P.extend(predicted_labels)
             S.extend(predicted_scores)
             test_losses.append(loss.item())
-    Precision = precision_score(Y, P)
-    Reacll = recall_score(Y, P)
+
+    # Calculate metrics using optimal thresholds
     AUC = roc_auc_score(Y, S)
-    tpr, fpr, _ = precision_recall_curve(Y, S)
-    PRC = auc(fpr, tpr)
-    Accuracy = accuracy_score(Y, P)
+
+    # Apply optimal thresholds
+    Y_pred_acc = (np.array(S) >= acc_threshold).astype(int)
+    Accuracy = accuracy_score(Y, Y_pred_acc)
+
+    Y_pred_f1 = (np.array(S) >= f1_threshold).astype(int)
+    F1 = f1_score(Y, Y_pred_f1)
+
     test_loss = np.average(test_losses)
-    return Y, P, test_loss, Accuracy, Precision, Reacll, AUC, PRC
-
-
-def test_model(dataset_load, save_path, DATASET, LOSS, dataset="Train", lable="best", save=True):
-    test_pbar = tqdm(
-        enumerate(
-            BackgroundGenerator(dataset_load)),
-        total=len(dataset_load))
-    T, P, loss_test, Accuracy_test, Precision_test, Recall_test, AUC_test, PRC_test = \
-        test_precess(model, test_pbar, LOSS)
-    if save:
-        with open(save_path + "/{}_{}_{}_prediction.txt".format(DATASET, dataset, lable), 'a') as f:
-            for i in range(len(T)):
-                f.write(str(T[i]) + " " + str(P[i]) + '\n')
-    results = '{}_set--Loss:{:.5f};Accuracy:{:.5f};Precision:{:.5f};Recall:{:.5f};AUC:{:.5f};PRC:{:.5f}.' \
-        .format(lable, loss_test, Accuracy_test, Precision_test, Recall_test, AUC_test, PRC_test)
-    print(results)
-    return results, Accuracy_test, Precision_test, Recall_test, AUC_test, PRC_test
-
-
-
-
-import os
+    return Y, S, test_loss, AUC, Accuracy, F1
 
 
 def split_to_dataset(split):
-    reaction_file= f"../data/drugbank/{split}_reaction.txt"
-    enzyme_file= f"../data/drugbank/{split}_enzyme.txt"
-    lines=[]
+    reaction_file = f"../data/drugbank/{split}_reaction.txt"
+    enzyme_file = f"../data/drugbank/{split}_enzyme.txt"
+    lines = []
     with open(reaction_file, "r") as f:
         reactions = f.read().splitlines()
     with open(enzyme_file, "r") as f:
@@ -114,8 +130,8 @@ def split_to_dataset(split):
     assert len(reactions) == len(enzymes)
     for i in range(len(reactions)):
         lines.append(f"- - {reactions[i]} {enzymes[i]} 1\n")
-    reaction_neg_file= f"../data/drugbank/{split}_reaction_neg.txt"
-    enzyme_neg_file= f"../data/drugbank/{split}_enzyme_neg.txt"
+    reaction_neg_file = f"../data/drugbank/{split}_reaction_neg.txt"
+    enzyme_neg_file = f"../data/drugbank/{split}_enzyme_neg.txt"
     with open(reaction_neg_file, "r") as f:
         reactions = f.read().splitlines()
     with open(enzyme_neg_file, "r") as f:
@@ -125,7 +141,6 @@ def split_to_dataset(split):
         lines.append(f"- - {reactions[i]} {enzymes[i]} 0")
     random.shuffle(lines)
     return lines
-
 
 
 if __name__ == "__main__":
@@ -140,8 +155,8 @@ if __name__ == "__main__":
     hp = hyperparameter()
 
     # random shuffle
+    AUC_List_stable, Accuracy_List_stable, F1_List_stable = [], [], []
 
-    Accuracy_List_stable, AUC_List_stable, AUPR_List_stable, Recall_List_stable, Precision_List_stable = [], [], [], [], []
     train_dataset = split_to_dataset("train")
     valid_dataset = split_to_dataset("valid")
     test_dataset = split_to_dataset("test")
@@ -168,10 +183,7 @@ if __name__ == "__main__":
             bias_p += [p]
         else:
             weight_p += [p]
-    """load trained model"""
-    # model.load_state_dict(torch.load("output/model/lr=0.001,dropout=0.1,lr_decay=0.5"))
 
-    # self.optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     optimizer = optim.AdamW(
         [{'params': weight_p, 'weight_decay': hp.weight_decay}, {'params': bias_p, 'weight_decay': 0}],
         lr=hp.Learning_rate)
@@ -180,7 +192,6 @@ if __name__ == "__main__":
                                             cycle_momentum=False,
                                             step_size_up=len(train_dataset))
     Loss = nn.CrossEntropyLoss()
-    # print(model)
 
     save_path = "./" + DATASET
     note = ''
@@ -189,61 +200,61 @@ if __name__ == "__main__":
     """Output files."""
     if not os.path.exists(save_path):
         os.makedirs(save_path)
-    file_results = save_path + 'The_results_of_whole_dataset.txt'
+    file_results = save_path + '/The_results_of_whole_dataset.txt'
 
     with open(file_results, 'w') as f:
         hp_attr = '\n'.join(['%s:%s' % item for item in hp.__dict__.items()])
         f.write(hp_attr + '\n')
 
     early_stopping = EarlyStopping(savepath=save_path, patience=hp.Patience, verbose=True, delta=0)
-    # print("Before train,test the model:")
-    # _,_,_,_,_,_ = test_model(test_dataset_load, save_path, DATASET, Loss, dataset="Test",lable="untrain",save=False)
+
     """Start training."""
     print('Training...')
     start = timeit.default_timer()
 
+    # Initialize best thresholds
+    best_acc_threshold = 0.5
+    best_f1_threshold = 0.5
+
     for epoch in range(1, hp.Epoch + 1):
-        trian_pbar = tqdm(
-            enumerate(
-                BackgroundGenerator(train_dataset_load)),
+        # Train
+        train_pbar = tqdm(
+            enumerate(BackgroundGenerator(train_dataset_load)),
             total=len(train_dataset_load))
-        """train"""
+
         train_losses_in_epoch = []
         model.train()
-        for trian_i, train_data in trian_pbar:
+        for train_i, train_data in train_pbar:
             '''data preparation '''
-            trian_compounds, trian_proteins, trian_labels = train_data
-            trian_compounds = trian_compounds.cuda()
-            trian_proteins = trian_proteins.cuda()
-            trian_labels = trian_labels.cuda()
+            train_compounds, train_proteins, train_labels = train_data
+            train_compounds = train_compounds.cuda()
+            train_proteins = train_proteins.cuda()
+            train_labels = train_labels.cuda()
 
             optimizer.zero_grad()
 
-            predicted_interaction = model(trian_compounds, trian_proteins)
-            train_loss = Loss(predicted_interaction, trian_labels)
+            predicted_interaction = model(train_compounds, train_proteins)
+            train_loss = Loss(predicted_interaction, train_labels)
             train_losses_in_epoch.append(train_loss.item())
             train_loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10)
             optimizer.step()
             scheduler.step()
-        train_loss_a_epoch = np.average(train_losses_in_epoch)  # 一次epoch的平均训练loss
+
+        train_loss_a_epoch = np.average(train_losses_in_epoch)
         writer.add_scalar('Train Loss', train_loss_a_epoch, epoch)
-        # avg_train_losses.append(train_loss_a_epoch)
 
-        """valid"""
-        valid_pbar = tqdm(
-            enumerate(
-                BackgroundGenerator(valid_dataset_load)),
-            total=len(valid_dataset_load))
-        # loss_dev, AUC_dev, PRC_dev = valider.valid(valid_pbar,weight_CE)
-        valid_losses_in_epoch = []
+        # Validate and find optimal thresholds
         model.eval()
-        Y, P, S = [], [], []
-        with torch.no_grad():
-            for valid_i, valid_data in valid_pbar:
-                '''data preparation '''
-                valid_compounds, valid_proteins, valid_labels = valid_data
+        valid_losses_in_epoch = []
+        Y_valid, S_valid = [], []
 
+        with torch.no_grad():
+            valid_pbar = tqdm(
+                enumerate(BackgroundGenerator(valid_dataset_load)),
+                total=len(valid_dataset_load))
+
+            for valid_i, valid_data in valid_pbar:
+                valid_compounds, valid_proteins, valid_labels = valid_data
                 valid_compounds = valid_compounds.cuda()
                 valid_proteins = valid_proteins.cuda()
                 valid_labels = valid_labels.cuda()
@@ -252,67 +263,88 @@ if __name__ == "__main__":
                 valid_loss = Loss(valid_scores, valid_labels)
                 valid_labels = valid_labels.to('cpu').data.numpy()
                 valid_scores = F.softmax(valid_scores, 1).to('cpu').data.numpy()
-                valid_predictions = np.argmax(valid_scores, axis=1)
-                valid_scores = valid_scores[:, 1]
+                valid_scores = valid_scores[:, 1]  # Probability for positive class
 
                 valid_losses_in_epoch.append(valid_loss.item())
-                Y.extend(valid_labels)
-                P.extend(valid_predictions)
-                S.extend(valid_scores)
-        Precision_dev = precision_score(Y, P)
-        Reacll_dev = recall_score(Y, P)
-        Accuracy_dev = accuracy_score(Y, P)
-        AUC_dev = roc_auc_score(Y, S)
-        tpr, fpr, _ = precision_recall_curve(Y, S)
-        PRC_dev = auc(fpr, tpr)
+                Y_valid.extend(valid_labels)
+                S_valid.extend(valid_scores)
+
+        # Find optimal thresholds on validation set
+        best_acc_threshold, best_valid_acc = find_optimal_threshold(Y_valid, S_valid, 'accuracy')
+        best_f1_threshold, best_valid_f1 = find_optimal_threshold(Y_valid, S_valid, 'f1')
+
+        # Calculate validation metrics
+        valid_auc = roc_auc_score(Y_valid, S_valid)
         valid_loss_a_epoch = np.average(valid_losses_in_epoch)
-        # avg_valid_loss.append(valid_loss)
 
+        # Test on validation set with optimal thresholds
+        _, _, _, valid_auc, valid_acc, valid_f1 = test_precess(
+            model, valid_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
+
+        # Test on test set with optimal thresholds from validation
+        _, S_test, test_loss, test_auc, test_acc, test_f1 = test_precess(
+            model, test_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
+
+        # Log all to tensorboard
+        writer.add_scalar('Valid Loss', valid_loss_a_epoch, epoch)
+        writer.add_scalar('Valid AUC', valid_auc, epoch)
+        writer.add_scalar('Valid Best Accuracy', valid_acc, epoch)
+        writer.add_scalar('Valid Best F1', valid_f1, epoch)
+        writer.add_scalar('Test Loss', test_loss, epoch)
+        writer.add_scalar('Test AUC', test_auc, epoch)
+        writer.add_scalar('Test Best Accuracy', test_acc, epoch)
+        writer.add_scalar('Test Best F1', test_f1, epoch)
+        writer.add_scalar('Accuracy Threshold', best_acc_threshold, epoch)
+        writer.add_scalar('F1 Threshold', best_f1_threshold, epoch)
+        writer.add_scalar('Learn Rate', optimizer.param_groups[0]['lr'], epoch)
+
+        # Print progress
         epoch_len = len(str(hp.Epoch))
-
         print_msg = (f'[{epoch:>{epoch_len}}/{hp.Epoch:>{epoch_len}}] ' +
                      f'train_loss: {train_loss_a_epoch:.5f} ' +
                      f'valid_loss: {valid_loss_a_epoch:.5f} ' +
-                     f'valid_AUC: {AUC_dev:.5f} ' +
-                     f'valid_PRC: {PRC_dev:.5f} ' +
-                     f'valid_Accuracy: {Accuracy_dev:.5f} ' +
-                     f'valid_Precision: {Precision_dev:.5f} ' +
-                     f'valid_Reacll: {Reacll_dev:.5f} ')
-
-        writer.add_scalar('Valid Loss', valid_loss_a_epoch, epoch)
-        writer.add_scalar('Valid AUC', AUC_dev, epoch)
-        writer.add_scalar('Valid AUPR', PRC_dev, epoch)
-        writer.add_scalar('Valid Accuracy', Accuracy_dev, epoch)
-        writer.add_scalar('Valid Precision', Precision_dev, epoch)
-        writer.add_scalar('Valid Reacll', Reacll_dev, epoch)
-        writer.add_scalar('Learn Rate', optimizer.param_groups[0]['lr'], epoch)
-
+                     f'valid_AUC: {valid_auc:.5f} ' +
+                     f'valid_best_acc: {valid_acc:.5f} (t={best_acc_threshold:.3f}) ' +
+                     f'valid_best_F1: {valid_f1:.5f} (t={best_f1_threshold:.3f})')
         print(print_msg)
 
-        # early_stopping needs the validation loss to check if it has decresed,
-        # and if it has, it will make a checkpoint of the current model
+        # Print test set results
+        test_msg = (f'Test results: ' +
+                    f'test_loss: {test_loss:.5f} ' +
+                    f'test_AUC: {test_auc:.5f} ' +
+                    f'test_best_acc: {test_acc:.5f} ' +
+                    f'test_best_F1: {test_f1:.5f}')
+        print(test_msg)
+
+        # Early stopping based on validation loss
         early_stopping(valid_loss_a_epoch, model, epoch)
+        if early_stopping.early_stop:
+            print("Early stopping triggered!")
+            break
 
-    trainset_test_stable_results, _, _, _, _, _ = test_model(train_dataset_load, save_path, DATASET, Loss,
-                                                             dataset="Train", lable="stable")
-    validset_test_stable_results, _, _, _, _, _ = test_model(valid_dataset_load, save_path, DATASET, Loss,
-                                                             dataset="Valid", lable="stable")
-    testset_test_stable_results, Accuracy_test, Precision_test, Recall_test, AUC_test, PRC_test = \
-        test_model(test_dataset_load, save_path, DATASET, Loss, dataset="Test", lable="stable")
-    AUC_List_stable.append(AUC_test)
-    Accuracy_List_stable.append(Accuracy_test)
-    AUPR_List_stable.append(PRC_test)
-    Recall_List_stable.append(Recall_test)
-    Precision_List_stable.append(Precision_test)
-    with open(save_path + "The_results_of_whole_dataset.txt", 'a') as f:
-        f.write("Test the stable model" + '\n')
-        f.write(trainset_test_stable_results + '\n')
-        f.write(validset_test_stable_results + '\n')
-        f.write(testset_test_stable_results + '\n')
+    # Load the best model for final evaluation
+    print("Loading best model for final evaluation...")
+    model.load_state_dict(torch.load(f"{save_path}/checkpoint.pt"))
 
-show_result("DRUGBANK", "stable",
-            Accuracy_List_stable, Precision_List_stable, Recall_List_stable,
-            AUC_List_stable, AUPR_List_stable)
+    # Final evaluation on test set
+    _, S_test, _, test_auc, test_acc, test_f1 = test_precess(
+        model, test_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
 
+    print(f"Final evaluation on test set (with best validation thresholds):")
+    print(f"AUC: {test_auc:.5f}")
+    print(f"Accuracy: {test_acc:.5f} (threshold={best_acc_threshold:.3f})")
+    print(f"F1 Score: {test_f1:.5f} (threshold={best_f1_threshold:.3f})")
 
+    # Save final results
+    AUC_List_stable.append(test_auc)
+    Accuracy_List_stable.append(test_acc)
+    F1_List_stable.append(test_f1)
 
+    with open(save_path + "/The_results_of_whole_dataset.txt", 'a') as f:
+        f.write("\nFinal Evaluation Results\n")
+        f.write(f"AUC: {test_auc:.5f}\n")
+        f.write(f"Best Accuracy: {test_acc:.5f} (threshold={best_acc_threshold:.3f})\n")
+        f.write(f"Best F1 Score: {test_f1:.5f} (threshold={best_f1_threshold:.3f})\n")
+
+# Show final results
+show_result(DATASET, "stable", Accuracy_List_stable, F1_List_stable, AUC_List_stable)
