@@ -274,7 +274,7 @@ if __name__ == "__main__":
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
     if args.trie:
-        trie = build_trie(tgt_train + tgt_test, tgt_tokenizer)
+        trie = build_trie(list(set(tgt_train + tgt_test)), tgt_tokenizer)
     else:
         trie = None
     encoder_dim = ENCODER_DIM
