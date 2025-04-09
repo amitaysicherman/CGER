@@ -313,7 +313,7 @@ if __name__ == "__main__":
     if args.gen_mol:
         output_dir += "_mol"
     if args.level == "drugbank":
-        output_dir = output_dir.replace("results", "results_drugbank")
+        output_dir = output_dir.replace("results", "results_db")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
