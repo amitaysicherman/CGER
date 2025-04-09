@@ -38,9 +38,9 @@ if __name__ == "__main__":
     print(f"skip count: {skip_count}")
     print(f"total count: {len(all_smiles)}")
 
-    train_count = int(len(all_smiles) * 16 / 25)
-    valid_count = int(len(all_smiles) * 4 / 25)
-    test_count = int(len(all_smiles) * 5 / 25)
+    train_count = int(len(all_smiles) * 0.85)
+    valid_count = int(len(all_smiles) * 0.05)
+    test_count = int(len(all_smiles) * 0.1)
     print(f"train count: {train_count}")
     print(f"valid count: {valid_count}")
     print(f"test count: {test_count}")
@@ -66,9 +66,7 @@ if __name__ == "__main__":
     valid_indexes = remaining_indexes[train_cont_to_add:train_cont_to_add + valid_count]
     test_indexes = remaining_indexes[train_cont_to_add + valid_count:train_count + valid_count + test_count]
 
-
-
-    neg_indexes_filter=[]
+    neg_indexes_filter = []
     for i in range(len(neg_smiles)):
         if neg_smiles[i] in seen_smiles and neg_fasta[i] in seen_fasta:
             neg_indexes_filter.append(i)
@@ -78,9 +76,9 @@ if __name__ == "__main__":
 
     neg_indexes = list(range(len(neg_smiles)))
     random.shuffle(neg_indexes)
-    train_neg_indexes = neg_indexes[:(len(neg_indexes) * 16 // 25)]
-    valid_neg_indexes = neg_indexes[(len(neg_indexes) * 16 // 25):(len(neg_indexes) * 20 // 25)]
-    test_neg_indexes = neg_indexes[(len(neg_indexes) * 20 // 25):]
+    train_neg_indexes = neg_indexes[:(len(neg_indexes) * 0.85)]
+    valid_neg_indexes = neg_indexes[(len(neg_indexes) * 0.85):(len(neg_indexes) * 0.9)]
+    test_neg_indexes = neg_indexes[(len(neg_indexes) * 0.9):]
 
     for name, indexes, neg_indexes in zip(["train", "valid", "test"], [train_indexes, valid_indexes, test_indexes],
                                           [train_neg_indexes, valid_neg_indexes, test_neg_indexes]):
