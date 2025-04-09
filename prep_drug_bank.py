@@ -76,9 +76,9 @@ if __name__ == "__main__":
 
     neg_indexes = list(range(len(neg_smiles)))
     random.shuffle(neg_indexes)
-    train_neg_indexes = neg_indexes[:(len(neg_indexes) * 0.85)]
-    valid_neg_indexes = neg_indexes[(len(neg_indexes) * 0.85):(len(neg_indexes) * 0.9)]
-    test_neg_indexes = neg_indexes[(len(neg_indexes) * 0.9):]
+    train_neg_indexes = neg_indexes[:int(len(neg_indexes) * 0.85)]
+    valid_neg_indexes = neg_indexes[int(len(neg_indexes) * 0.85):int(len(neg_indexes) * 0.9)]
+    test_neg_indexes = neg_indexes[int(len(neg_indexes) * 0.9):]
 
     for name, indexes, neg_indexes in zip(["train", "valid", "test"], [train_indexes, valid_indexes, test_indexes],
                                           [train_neg_indexes, valid_neg_indexes, test_neg_indexes]):
