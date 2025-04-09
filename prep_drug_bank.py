@@ -21,53 +21,85 @@ if __name__ == "__main__":
         lines = f.read().splitlines()
     all_smiles = []
     all_fasta = []
+    neg_smiles = []
+    neg_fasta = []
     skip_count = 0
     for i, line in enumerate(lines):
         _, __, smiles, fasta, label = line.split(" ")
         label = int(label)
-        if label == 0:
-            skip_count += 1
-            continue
         smiles = remove_stereo_mol(smiles)
+
+        if label == 0:
+            neg_smiles.append(smiles)
+            neg_fasta.append(fasta)
+            continue
         all_smiles.append(smiles)
         all_fasta.append(fasta)
     print(f"skip count: {skip_count}")
     print(f"total count: {len(all_smiles)}")
-    fasta_unique = set(all_fasta)
 
-    train_smiles = []
-    train_fasta = []
-    test_smiles = []
-    test_fasta = []
+    train_count = int(len(all_smiles) * 16 / 25)
+    valid_count = int(len(all_smiles) * 4 / 25)
+    test_count = int(len(all_smiles) * 5 / 25)
+    print(f"train count: {train_count}")
+    print(f"valid count: {valid_count}")
+    print(f"test count: {test_count}")
+    print(f"total count: {len(all_smiles)}")
 
-
-    for fasta in fasta_unique:
-        indexes = [i for i, x in enumerate(all_fasta) if x == fasta]
-        if len(indexes) == 1:
-            train_indexes = indexes
-            test_indexes = []
+    indexes = list(range(len(all_smiles)))
+    seen_smiles = set()
+    seen_fasta = set()
+    train_indexes = []
+    remaining_indexes = []
+    for i in range(len(all_smiles)):
+        if all_smiles[i] not in seen_smiles or all_fasta[i] not in seen_fasta:
+            seen_smiles.add(all_smiles[i])
+            seen_fasta.add(all_fasta[i])
+            train_indexes.append(i)
+            continue
         else:
-            test_count = max(int(len(indexes) * 0.1), 1)
-            train_count = len(indexes) - test_count
-            train_indexes = random.sample(indexes, train_count)
-            test_indexes = list(set(indexes) - set(train_indexes))
-        print(f"train: {len(train_indexes)}, test: {len(test_indexes)}")
+            remaining_indexes.append(i)
 
-        for i in train_indexes:
-            train_smiles.append(all_smiles[i])
-            train_fasta.append(all_fasta[i])
-        for i in test_indexes:
-            test_smiles.append(all_smiles[i])
-            test_fasta.append(all_fasta[i])
+    random.shuffle(remaining_indexes)
+    train_cont_to_add = train_count - len(train_indexes)
+    train_indexes += remaining_indexes[:train_cont_to_add]
+    valid_indexes = remaining_indexes[train_cont_to_add:train_cont_to_add + valid_count]
+    test_indexes = remaining_indexes[train_cont_to_add + valid_count:train_count + valid_count + test_count]
 
-    print(f"train: {len(train_smiles)}")
-    print(f"test: {len(test_smiles)}")
 
-    with open(f"{output_base}/test_enzyme.txt", "w") as f:
-        f.write("\n".join(test_fasta))
-    with open(f"{output_base}/train_enzyme.txt", "w") as f:
-        f.write("\n".join(train_fasta))
-    with open(f"{output_base}/test_reaction.txt", "w") as f:
-        f.write("\n".join(test_smiles))
-    with open(f"{output_base}/train_reaction.txt", "w") as f:
-        f.write("\n".join(train_smiles))
+
+    neg_indexes_filter=[]
+    for i in range(len(neg_smiles)):
+        if neg_smiles[i] in seen_smiles and neg_fasta[i] in seen_fasta:
+            neg_indexes_filter.append(i)
+    print(f"neg count: {len(neg_smiles)}, neg filter count: {len(neg_indexes_filter)}")
+    neg_smiles = [neg_smiles[i] for i in neg_indexes_filter]
+    neg_fasta = [neg_fasta[i] for i in neg_indexes_filter]
+
+    neg_indexes = list(range(len(neg_smiles)))
+    random.shuffle(neg_indexes)
+    train_neg_indexes = neg_indexes[:(len(neg_indexes) * 16 // 25)]
+    valid_neg_indexes = neg_indexes[(len(neg_indexes) * 16 // 25):(len(neg_indexes) * 20 // 25)]
+    test_neg_indexes = neg_indexes[(len(neg_indexes) * 20 // 25):]
+
+    for name, indexes, neg_indexes in zip(["train", "valid", "test"], [train_indexes, valid_indexes, test_indexes],
+                                          [train_neg_indexes, valid_neg_indexes, test_neg_indexes]):
+        assert all(all_smiles[i] in seen_smiles for i in indexes)
+        assert all(all_fasta[i] in seen_fasta for i in indexes)
+
+        smiles = [all_smiles[i] for i in indexes]
+        fasta = [all_fasta[i] for i in indexes]
+
+        with open(f"{output_base}/{name}_reaction.txt", "w") as f:
+            f.write("\n".join(smiles))
+        with open(f"{output_base}/{name}_enzyme.txt", "w") as f:
+            f.write("\n".join(fasta))
+        assert all(neg_smiles[i] in seen_smiles for i in neg_indexes)
+        assert all(neg_fasta[i] in seen_fasta for i in neg_indexes)
+
+        neg_smiles_in = [neg_smiles[i] for i in neg_indexes]
+        neg_fasta_in = [neg_fasta[i] for i in neg_indexes]
+        with open(f"{output_base}/{name}_reaction_neg.txt", "w") as f:
+            f.write("\n".join(neg_smiles_in))
+        with open(f"{output_base}/{name}_enzyme_neg.txt", "w") as f:
+            f.write("\n".join(neg_fasta_in))

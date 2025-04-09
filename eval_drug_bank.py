@@ -93,41 +93,41 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
 #         return prob
 
 
-def calculate_metrics(y_true, y_pred):
-    precision = precision_score(y_true, y_pred)
-    recall = recall_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
-    accuracy = (y_true == y_pred).mean()
-    return precision, recall, f1, accuracy
-
-
-def evaluate_model_all(pos_prob, neg_prob):
-    y_true = np.concatenate([np.ones(len(pos_prob)), np.zeros(len(neg_prob))])
-    y_scores = np.concatenate([pos_prob, neg_prob])
-
-    all_possible_thresholds = np.unique(y_scores)
-    best_precision = 0
-    best_recall = 0
-    best_f1 = 0
-    best_acc = 0
-    pbar = tqdm(all_possible_thresholds, total=len(all_possible_thresholds))
-    for threshold in pbar:
-        y_pred = (y_scores >= threshold).astype(int)
-        precision, recall, f1, acc = calculate_metrics(y_true, y_pred)
-        print(
-            f"Threshold: {threshold:.2f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, Accuracy: {acc:.4f}")
-        if f1 > best_f1:
-            best_f1 = f1
-        if precision > best_precision:
-            best_precision = precision
-        if recall > best_recall:
-            best_recall = recall
-        if acc > best_acc:
-            best_acc = acc
-        pbar.set_description(
-            f"Best F1: {best_f1:.4f}, Best Precision: {best_precision:.4f}, Best Recall: {best_recall:.4f}, Best Accuracy: {best_acc:.4f}")
-    print(
-        f"Best F1: {best_f1:.4f}, Best Precision: {best_precision:.4f}, Best Recall: {best_recall:.4f}, Best Accuracy: {best_acc:.4f}")
+# def calculate_metrics(y_true, y_pred):
+#     precision = precision_score(y_true, y_pred)
+#     recall = recall_score(y_true, y_pred)
+#     f1 = f1_score(y_true, y_pred)
+#     accuracy = (y_true == y_pred).mean()
+#     return precision, recall, f1, accuracy
+#
+#
+# def evaluate_model_all(pos_prob, neg_prob):
+#     y_true = np.concatenate([np.ones(len(pos_prob)), np.zeros(len(neg_prob))])
+#     y_scores = np.concatenate([pos_prob, neg_prob])
+#
+#     all_possible_thresholds = np.unique(y_scores)
+#     best_precision = 0
+#     best_recall = 0
+#     best_f1 = 0
+#     best_acc = 0
+#     pbar = tqdm(all_possible_thresholds, total=len(all_possible_thresholds))
+#     for threshold in pbar:
+#         y_pred = (y_scores >= threshold).astype(int)
+#         precision, recall, f1, acc = calculate_metrics(y_true, y_pred)
+#         print(
+#             f"Threshold: {threshold:.2f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1-score: {f1:.4f}, Accuracy: {acc:.4f}")
+#         if f1 > best_f1:
+#             best_f1 = f1
+#         if precision > best_precision:
+#             best_precision = precision
+#         if recall > best_recall:
+#             best_recall = recall
+#         if acc > best_acc:
+#             best_acc = acc
+#         pbar.set_description(
+#             f"Best F1: {best_f1:.4f}, Best Precision: {best_precision:.4f}, Best Recall: {best_recall:.4f}, Best Accuracy: {best_acc:.4f}")
+#     print(
+#         f"Best F1: {best_f1:.4f}, Best Precision: {best_precision:.4f}, Best Recall: {best_recall:.4f}, Best Accuracy: {best_acc:.4f}")
 
 
 # def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False):
@@ -175,10 +175,10 @@ def get_batch_probabilities(model, batch):
         return batch_probs
 
 
-def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=32):
+def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32,return_prob=False):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
-    print(f"Number of positive examples: {len(pos_dataloader)*batch_size}")
-    print(f"Number of negative examples: {len(neg_dataset)*batch_size}")
+    print(f"Number of positive examples: {len(pos_dataloader) * batch_size}")
+    print(f"Number of negative examples: {len(neg_dataset) * batch_size}")
     k = min(len(pos_dataloader), len(neg_dataset))
     neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
@@ -201,11 +201,9 @@ def evaluate_model(pos_dataset, neg_dataset, model, eval_all=False, batch_size=3
     # Calculate metrics
     y_true = np.concatenate([np.ones(len(pos_prob)), np.zeros(len(neg_prob))])
     y_scores = np.concatenate([pos_prob, neg_prob])
+    if return_prob:
+        return y_true, y_scores
     auc_score = roc_auc_score(y_true, y_scores)
-
-    if eval_all:
-        print(f"AUC: {auc_score:.4f}")
-        evaluate_model_all(pos_prob, neg_prob)
 
     return {"auc": auc_score}
 
@@ -222,49 +220,62 @@ def get_best_cp(base_path):
     model_path = f"{best_cp_dir}/pytorch_model.bin"
     return model_path
 
+from dataclasses import dataclass
+@dataclass
+class Config:
+    size: str = "l"
+    dropout: float = 0.0
+    pooling: bool = True
+    bottleneck_dim: int = 128
+    learning_rate: float = 0.0001
+    mol: bool = True
+
+    def to_list(self):
+        return [self.size, self.dropout, self.pooling, self.bottleneck_dim, self.learning_rate, self.mol]
 
 def main():
-    size = "l"
-    dropout = 0.0
-    pooling = True
-    bottleneck_dim = 128
-    learning_rate = 0.0001
-    mol = True
 
-    reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
-                                                                                     drugbank=True, gen_mol=mol)
+    cong1= Config("l", 0.0, True, 128, 0.0001, True)
+    cong2= Config("l", 0.0, True, 128, 0.0001, False)
 
-    pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer,
-                                                    gen_mol=mol,
-                                                    return_files=True)
-    trie = build_trie(trie_files, esm_tokenizer, max_length=512)
-    reaction_model.to(device).eval()
-    decoder.to(device).eval()
-    encoder_dim = 768 if not mol else 1280
-    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Number of parameters in the model: {n_params:,}")
+    all_scores = []
+    all_true = []
+    for cong in [cong1, cong2]:
+        size, dropout, pooling, bottleneck_dim, learning_rate, mol = cong.to_list()
+        reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size, dropout=dropout,
+                                                                                         drugbank=True, gen_mol=mol)
 
-    output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
-    if bottleneck_dim > 0:
-        output_dir += f"_bottleneck_{bottleneck_dim}"
-    if pooling:
-        output_dir += "_pooling"
-    if mol:
-        output_dir += "_mol"
+        pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer,
+                                                        gen_mol=mol,
+                                                        return_files=True)
+        trie = build_trie(trie_files, esm_tokenizer, max_length=512)
+        reaction_model.to(device).eval()
+        decoder.to(device).eval()
+        encoder_dim = 768 if not mol else 1280
+        model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
+        n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Number of parameters in the model: {n_params:,}")
 
-    model_path = f"results_drugbank/{output_dir}/"
-    # all_cp_dirs = [os.path.join(model_path, d) for d in os.listdir(model_path) if
-    #                os.path.isdir(os.path.join(model_path, d)) and d.startswith("checkpoint")]
-    # all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
-    # last_cp_dir = all_cp_dirs[-1]
-    # model_path = f"{last_cp_dir}/pytorch_model.bin"
-    model_path = get_best_cp(model_path)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.eval().to(device)
-    print(f"Model loaded from {model_path}")
+        output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
+        if bottleneck_dim > 0:
+            output_dir += f"_bottleneck_{bottleneck_dim}"
+        if pooling:
+            output_dir += "_pooling"
+        if mol:
+            output_dir += "_mol"
 
-    print(evaluate_model(pos_dataset, neg_dataset, model, eval_all=True, batch_size=4))
+        model_path = f"results_drugbank/{output_dir}/"
+        model_path = get_best_cp(model_path)
+        model.load_state_dict(torch.load(model_path, map_location=device))
+        model.eval().to(device)
+        print(f"Model loaded from {model_path}")
+        y_true, y_scores = evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=True)
+        all_scores.append(y_scores)
+        all_true.append(y_true)
+    assert (all_true[0]==all_true[1]).all()
+    all_scores = np.stack(all_scores)
+    y_true = all_true[0]
+    auc=roc_auc_score(y_true, all_scores.sum(axis=0))
 
 
 if __name__ == "__main__":

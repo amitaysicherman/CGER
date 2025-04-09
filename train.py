@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
         pos_dataset, neg_dataset = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                gen_mol=args.gen_mol)
-        compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model, eval_all=False)
+        compute_metrics_func = lambda x: evaluate_model(pos_dataset, neg_dataset, model)
 
         eval_dataset = {"test": test_dataset}
         metric_for_best_model = "eval_test_auc"
