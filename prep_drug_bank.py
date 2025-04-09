@@ -24,6 +24,7 @@ if __name__ == "__main__":
     neg_smiles = []
     neg_fasta = []
     skip_count = 0
+    random.shuffle(lines)
     for i, line in enumerate(lines):
         _, __, smiles, fasta, label = line.split(" ")
         label = int(label)

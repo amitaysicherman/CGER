@@ -103,6 +103,30 @@ def test_model(dataset_load, save_path, DATASET, LOSS, dataset="Train", lable="b
 import os
 
 
+def split_to_dataset(split):
+    reaction_file= f"../data/drugbank/{split}_reaction.txt"
+    enzyme_file= f"../data/drugbank/{split}_enzyme.txt"
+    lines=[]
+    with open(reaction_file, "r") as f:
+        reactions = f.read().splitlines()
+    with open(enzyme_file, "r") as f:
+        enzymes = f.read().splitlines()
+    assert len(reactions) == len(enzymes)
+    for i in range(len(reactions)):
+        lines.append(f"- - {reactions[i]} {enzymes[i]} 1\n")
+    reaction_neg_file= f"../data/drugbank/{split}_reaction_neg.txt"
+    enzyme_neg_file= f"../data/drugbank/{split}_enzyme_neg.txt"
+    with open(reaction_neg_file, "r") as f:
+        reactions = f.read().splitlines()
+    with open(enzyme_neg_file, "r") as f:
+        enzymes = f.read().splitlines()
+    assert len(reactions) == len(enzymes)
+    for i in range(len(reactions)):
+        lines.append(f"- - {reactions[i]} {enzymes[i]} 0\n")
+    random.shuffle(lines)
+    return lines
+
+
 
 if __name__ == "__main__":
     """select seed"""
@@ -118,8 +142,11 @@ if __name__ == "__main__":
     # random shuffle
 
     Accuracy_List_stable, AUC_List_stable, AUPR_List_stable, Recall_List_stable, Precision_List_stable = [], [], [], [], []
-
-
+    train_dataset = split_to_dataset("train")
+    valid_dataset = split_to_dataset("valid")
+    test_dataset = split_to_dataset("test")
+    train_dataset = CustomDataSet(train_dataset)
+    valid_dataset = CustomDataSet(valid_dataset)
     test_dataset = CustomDataSet(test_dataset)
 
     train_dataset_load = DataLoader(train_dataset, batch_size=hp.Batch_size, shuffle=True, num_workers=0,

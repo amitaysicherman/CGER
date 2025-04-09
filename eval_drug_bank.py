@@ -155,8 +155,8 @@ def get_batch_probabilities(model, batch):
 
 def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
-    print(f"Number of positive examples: {len(pos_dataloader) * batch_size}")
-    print(f"Number of negative examples: {len(neg_dataset) * batch_size}")
+    print(f"Number of positive examples: {len(pos_dataset)}")
+    print(f"Number of negative examples: {len(neg_dataset)}")
     k = min(len(pos_dataloader), len(neg_dataset))
     neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
