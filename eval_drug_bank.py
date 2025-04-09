@@ -49,8 +49,9 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
     src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol)
     neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    if return_files:
+        return pos_valid, neg_valid, pos_test, neg_test, tgt_train
     return pos_valid, neg_valid, pos_test, neg_test
-
 
 
 # def get_probabilitiy(model, sample):
@@ -152,6 +153,7 @@ def get_batch_probabilities(model, batch):
 
         return batch_probs
 
+
 def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
     """Find the optimal threshold for either accuracy or F1 score"""
     thresholds = np.unique(y_scores)
@@ -173,11 +175,12 @@ def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
     return best_threshold, best_score
 
 
-def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False,best_acc_threshold=None,best_f1_threshold=None):
+def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False, best_acc_threshold=None,
+                   best_f1_threshold=None):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataset)}")
     print(f"Number of negative examples: {len(neg_dataset)}")
-    k = min(len(pos_dataloader), len(neg_dataset))
+    k = min(len(pos_dataset), len(neg_dataset))
     neg_indices = random.choices(range(len(neg_dataset)), k=k)
     neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
     neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
@@ -201,7 +204,6 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
     y_scores = np.concatenate([pos_prob, neg_prob])
     if return_prob:
         return y_true, y_scores
-
 
     auc_score = roc_auc_score(y_true, y_scores)
     if best_acc_threshold is None:
@@ -244,49 +246,109 @@ class Config:
         return [self.size, self.dropout, self.pooling, self.bottleneck_dim, self.learning_rate, self.mol]
 
 
+
+def get_model(decoder,trie,size, dropout, pooling, bottleneck_dim, learning_rate, mol):
+    encoder_dim = 768 if not mol else 1280
+    model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Number of parameters in the model: {n_params:,}")
+
+    output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
+    if bottleneck_dim > 0:
+        output_dir += f"_bottleneck_{bottleneck_dim}"
+    if pooling:
+        output_dir += "_pooling"
+    if mol:
+        output_dir += "_mol"
+
+    model_path = f"results_drugbank/{output_dir}/"
+    model_path = get_best_cp(model_path)
+    model.load_state_dict(torch.load(model_path, map_location=device))
+    model.eval().to(device)
+    print(f"Model loaded from {model_path}")
+    return model
+
 def main():
     cong1 = Config("l", 0.0, True, 128, 0.0001, True)
     cong2 = Config("l", 0.0, True, 128, 0.0001, False)
 
     all_scores = []
     all_true = []
+
+    all_scores_val = []
+    all_true_val = []
     for cong in [cong1, cong2]:
         size, dropout, pooling, bottleneck_dim, learning_rate, mol = cong.to_list()
         reaction_model, reaction_tokenizer, decoder, esm_tokenizer = get_encoder_decoder(decoder_size=size,
                                                                                          dropout=dropout,
                                                                                          drugbank=True, gen_mol=mol)
 
-        pos_dataset, neg_dataset, trie_files = get_data(pooling, reaction_model, reaction_tokenizer, esm_tokenizer,
-                                                        gen_mol=mol,
-                                                        return_files=True)
-        trie = build_trie(trie_files, esm_tokenizer, max_length=512)
+        pos_valid, neg_valid, pos_test, neg_test, trie_files = get_data(pooling, reaction_model, reaction_tokenizer,
+                                                                        esm_tokenizer,
+                                                                        gen_mol=mol,
+                                                                        return_files=True)
+
+        trie = build_trie(list(set(trie_files)), esm_tokenizer, max_length=512)
         reaction_model.to(device).eval()
         decoder.to(device).eval()
-        encoder_dim = 768 if not mol else 1280
-        model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
-        n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        print(f"Number of parameters in the model: {n_params:,}")
+        model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol)
 
-        output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
-        if bottleneck_dim > 0:
-            output_dir += f"_bottleneck_{bottleneck_dim}"
-        if pooling:
-            output_dir += "_pooling"
-        if mol:
-            output_dir += "_mol"
 
-        model_path = f"results_drugbank/{output_dir}/"
-        model_path = get_best_cp(model_path)
-        model.load_state_dict(torch.load(model_path, map_location=device))
-        model.eval().to(device)
-        print(f"Model loaded from {model_path}")
-        y_true, y_scores = evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=True)
+        y_true, y_scores = evaluate_model(pos_test, neg_test, model, batch_size=32, return_prob=True)
         all_scores.append(y_scores)
         all_true.append(y_true)
+
+
+        y_true_val, y_scores_val = evaluate_model(pos_valid, neg_valid, model, batch_size=32, return_prob=True)
+        all_scores_val.append(y_scores_val)
+        all_true_val.append(y_true_val)
+
+
+
+    y_true=all_true[0]
+    y_scores=all_scores[0]
+    y_true_val=all_true_val[0]
+    y_scores_val=all_scores_val[0]
+    # Calculate metrics
+    auc= roc_auc_score(y_true, y_scores)
+    best_acc_threshold, best_acc_score = find_optimal_threshold(y_true_val, y_scores_val, metric='accuracy')
+    best_f1_threshold, best_f1_score = find_optimal_threshold(y_true_val, y_scores_val, metric='f1')
+    print(f"AUC: {auc:.4f}")
+    print(f"Best accuracy threshold: {best_acc_threshold:.4f}, Best accuracy score: {best_acc_score:.4f}")
+    print(f"Best F1 threshold: {best_f1_threshold:.4f}, Best F1 score: {best_f1_score:.4f}")
+    # test acc,f1
+    best_acc_score = accuracy_score(y_true, (y_scores >= best_acc_threshold).astype(int))
+    best_f1_score = f1_score(y_true, (y_scores >= best_f1_threshold).astype(int))
+    print(f"Test accuracy score: {best_acc_score:.4f}")
+    print(f"Test F1 score: {best_f1_score:.4f}")
+
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    sns.set(style="whitegrid")
+    plt.figure(figsize=(10, 6))
+    plt.hist(y_scores[y_true==1], bins=50, alpha=0.5, label='Positive', color='blue')
+    plt.hist(y_scores[y_true==0], bins=50, alpha=0.5, label='Negative', color='red')
+    plt.axvline(x=best_acc_threshold, color='green', linestyle='--', label='Best Accuracy Threshold')
+    plt.axvline(x=best_f1_threshold, color='orange', linestyle='--', label='Best F1 Threshold')
+    plt.xlabel('Probability')
+    plt.ylabel('Frequency')
+    plt.title('Histogram of Probabilities')
+    plt.legend()
+
+
+
     assert (all_true[0] == all_true[1]).all()
     all_scores = np.stack(all_scores)
     y_true = all_true[0]
     auc = roc_auc_score(y_true, all_scores.sum(axis=0))
+    best_acc_threshold, best_acc_score = find_optimal_threshold(y_true, all_scores.sum(axis=0), metric='accuracy')
+    best_f1_threshold, best_f1_score = find_optimal_threshold(y_true, all_scores.sum(axis=0), metric='f1')
+    print(f"AUC: {auc:.4f}")
+    print(f"Best accuracy threshold: {best_acc_threshold:.4f}, Best accuracy score: {best_acc_score:.4f}")
+    print(f"Best F1 threshold: {best_f1_threshold:.4f}, Best F1 score: {best_f1_score:.4f}")
+    # Save the results
+
 
 
 if __name__ == "__main__":
