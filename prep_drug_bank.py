@@ -103,3 +103,5 @@ if __name__ == "__main__":
             f.write("\n".join(neg_smiles_in))
         with open(f"{output_base}/{name}_enzyme_neg.txt", "w") as f:
             f.write("\n".join(neg_fasta_in))
+
+        print(f"Saved {name} , {len(smiles)} positive and {len(neg_smiles_in)} negative samples")
