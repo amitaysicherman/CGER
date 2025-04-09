@@ -178,12 +178,10 @@ def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
 def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False, best_acc_threshold=None,
                    best_f1_threshold=None):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
+    neg_dataloader = DataLoader(neg_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataset)}")
     print(f"Number of negative examples: {len(neg_dataset)}")
-    k = min(len(pos_dataset), len(neg_dataset))
-    neg_indices = random.choices(range(len(neg_dataset)), k=k)
-    neg_sampled_dataset = torch.utils.data.Subset(neg_dataset, neg_indices)
-    neg_dataloader = DataLoader(neg_sampled_dataset, batch_size=batch_size, shuffle=False)
+
 
     pos_prob = []
 
