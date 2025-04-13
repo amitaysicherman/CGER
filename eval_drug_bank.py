@@ -29,10 +29,15 @@ def remove_stereo_mol(smiles):
     return Chem.MolToSmiles(mol, canonical=True)
 
 
-def load_negative_files(split, mol):
-    with open(f"data/drugbank/{split}_reaction_neg.txt", "r") as f:
+def load_negative_files(split, mol,cold_smiles=0, cold_fasta=0):
+    basd_path = f"data/drugbank"
+    if cold_smiles:
+        basd_path += f"_cs"
+    if cold_fasta:
+        basd_path += f"_cf"
+    with open(f"{basd_path}/{split}_reaction_neg.txt", "r") as f:
         src = f.read().splitlines()
-    with open(f"data/drugbank/{split}_enzyme_neg.txt", "r") as f:
+    with open(f"{basd_path}/{split}_enzyme_neg.txt", "r") as f:
         tgt = f.read().splitlines()
     if mol:
         src, tgt = tgt, src
@@ -47,9 +52,9 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
     pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
-    src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol)
+    src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta)
 
-    src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol)
+    src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta)
     neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     if return_files:
