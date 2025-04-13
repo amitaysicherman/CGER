@@ -271,8 +271,6 @@ if __name__ == "__main__":
     parser.add_argument("--cold_smiles", type=int, default=0)
     parser.add_argument("--cold_fasta", type=int, default=0)
 
-    parser.add_argument()
-
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
