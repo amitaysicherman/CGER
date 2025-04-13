@@ -331,6 +331,10 @@ if __name__ == "__main__":
         output_dir += "_pooling"
     if args.gen_mol:
         output_dir += "_mol"
+    if args.cold_smiles:
+        output_dir += "_cs"
+    if args.cold_fasta:
+        output_dir += "_cf"
     if args.level == "drugbank":
         output_dir = output_dir.replace("results", "results_db")
     logs_dir = output_dir.replace("results", "logs")
