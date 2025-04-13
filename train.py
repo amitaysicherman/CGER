@@ -76,9 +76,14 @@ def load_file(file_path):
     return texts
 
 
-def load_files(level="easy", gen_mol=0):
+def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0):
     """Load training and testing files"""
-    base_dir = f"data/{level}/"
+    base_dir = f"data/{level}"
+    if cold_smiles:
+        base_dir += "_cs"
+    if cold_fasta:
+        base_dir += "_cf"
+
 
     src_train = load_file(pjoin(base_dir, "train_reaction.txt"))
     tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt"))
@@ -263,9 +268,16 @@ if __name__ == "__main__":
     parser.add_argument("--bottleneck_dim", type=int, default=128)
     parser.add_argument("--pooling", type=int, default=1)
     parser.add_argument("--gen_mol", type=int, default=0)
+    parser.add_argument("--cold_smiles", type=int, default=0)
+    parser.add_argument("--cold_fasta", type=int, default=0)
+
+    parser.add_argument()
+
     args = parser.parse_args()
 
-    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol)
+    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
+                                                                                   cold_smiles=args.cold_smiles,
+                                                                                   cold_fasta=args.cold_fasta)
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level == "drugbank",

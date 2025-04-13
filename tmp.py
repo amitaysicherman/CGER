@@ -1,350 +1,290 @@
-# -*- coding: utf-8 -*-
-"""
-@Time:Created on 2020/7/05
-@author: Qichang Zhao
-Modified to include test set evaluation in each epoch and use optimal thresholds
-"""
-import random
-import os
-from model import AttentionDTI
-from dataset import CustomDataSet, collate_fn
-from torch.utils.data import DataLoader
-from prefetch_generator import BackgroundGenerator
-from tqdm import tqdm
-from hyperparameter import hyperparameter
-from pytorchtools import EarlyStopping
-import timeit
-from tensorboardX import SummaryWriter
+import re, sys, os
+from utils import utils
+from utils.preprocess import PREPROCESS
 import numpy as np
+import pandas as pd
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, precision_recall_curve, auc
+import warnings
 
-DATASET = "DRUGBANK"
+warnings.filterwarnings("ignore", category=Warning, module="torchvision")
+warnings.filterwarnings('ignore')
+import pytorch_lightning as pl
+import hydra
+from omegaconf import DictConfig, OmegaConf
+from typing import Any, List, Optional, Tuple
+from pytorch_lightning.loggers import TensorBoardLogger
+import ray
+from ray.tune.integration.pytorch_lightning import TuneReportCallback
+from ray import tune
+import yaml
+from ray.tune.search.optuna import OptunaSearch
+from ray.tune.schedulers import ASHAScheduler
+import multiprocessing
+from multiprocessing import Manager
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-def show_result(DATASET, lable, Accuracy_List, F1_List, AUC_List):
-    Accuracy_mean, Accuracy_var = np.mean(Accuracy_List), np.var(Accuracy_List)
-    F1_mean, F1_var = np.mean(F1_List), np.var(F1_List)
-    AUC_mean, AUC_var = np.mean(AUC_List), np.var(AUC_List)
-    print("The {} model's results:".format(lable))
-    with open("./{}/results.txt".format(DATASET), 'w') as f:
-        f.write('Accuracy(std):{:.4f}({:.4f})'.format(Accuracy_mean, Accuracy_var) + '\n')
-        f.write('F1(std):{:.4f}({:.4f})'.format(F1_mean, F1_var) + '\n')
-        f.write('AUC(std):{:.4f}({:.4f})'.format(AUC_mean, AUC_var) + '\n')
-
-    print('Accuracy(std):{:.4f}({:.4f})'.format(Accuracy_mean, Accuracy_var))
-    print('F1(std):{:.4f}({:.4f})'.format(F1_mean, F1_var))
-    print('AUC(std):{:.4f}({:.4f})'.format(AUC_mean, AUC_var))
-
-
-def load_tensor(file_name, dtype):
-    # return [dtype(d).to(hp.device) for d in np.load(file_name + '.npy', allow_pickle=True)]
-    return [dtype(d) for d in np.load(file_name + '.npy', allow_pickle=True)]
+"""
+define device for featurizer that's outside the lightning module
+"""
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
-    """Find the optimal threshold for either accuracy or F1 score"""
-    thresholds = np.unique(y_scores)
-    best_threshold = 0
-    best_score = 0
+# device = 'cpu'
+def train(cfg, dataset, shared_metrics, tune=False):
+    tb_logger = TensorBoardLogger('../logger_DTI/tb_logs', name=cfg['logger']['name'])
 
-    for threshold in thresholds:
-        y_pred = (np.array(y_scores) >= threshold).astype(int)
+    # Init datamodule
+    data_module: LightningModule = hydra.utils.instantiate(
+        cfg['datamodule'], cfg, dataset, _recursive_=False
+    )
 
-        if metric == 'accuracy':
-            score = accuracy_score(y_true, y_pred)
-        elif metric == 'f1':
-            score = f1_score(y_true, y_pred)
+    # Init lightning model
+    model: LightningModule = hydra.utils.instantiate(
+        cfg['module'], cfg, dataset, _recursive_=False
+    )
 
-        if score > best_score:
-            best_score = score
-            best_threshold = threshold
+    # Init callbacks (early stopping, checkpointing)
+    callbacks: List[Callback] = utils.instantiate_callbacks(
+        cfg['callbacks']
+    )
 
-    return best_threshold, best_score
-
-
-def evaluate_with_threshold(y_true, y_scores, acc_threshold, f1_threshold):
-    """Evaluate performance using optimal thresholds for accuracy and F1"""
-    # For AUC
-    auc_score = roc_auc_score(y_true, y_scores)
-
-    # For accuracy
-    y_pred_acc = (np.array(y_scores) >= acc_threshold).astype(int)
-    accuracy = accuracy_score(y_true, y_pred_acc)
-
-    # For F1
-    y_pred_f1 = (np.array(y_scores) >= f1_threshold).astype(int)
-    f1 = f1_score(y_true, y_pred_f1)
-
-    return auc_score, accuracy, f1
-
-
-def test_precess(model, data_loader, LOSS, acc_threshold=0.5, f1_threshold=0.5):
-    model.eval()
-    test_losses = []
-    Y, S = [], []
-    with torch.no_grad():
-        pbar = tqdm(enumerate(BackgroundGenerator(data_loader)), total=len(data_loader))
-        for i, data in pbar:
-            '''data preparation '''
-            compounds, proteins, labels = data
-            compounds = compounds.cuda()
-            proteins = proteins.cuda()
-            labels = labels.cuda()
-
-            predicted_scores = model(compounds, proteins)
-            loss = LOSS(predicted_scores, labels)
-            correct_labels = labels.to('cpu').data.numpy()
-            predicted_scores = F.softmax(predicted_scores, 1).to('cpu').data.numpy()
-            predicted_scores = predicted_scores[:, 1]  # Get probability for positive class
-
-            Y.extend(correct_labels)
-            S.extend(predicted_scores)
-            test_losses.append(loss.item())
-
-    # Calculate metrics using optimal thresholds
-    AUC = roc_auc_score(Y, S)
-
-    # Apply optimal thresholds
-    Y_pred_acc = (np.array(S) >= acc_threshold).astype(int)
-    Accuracy = accuracy_score(Y, Y_pred_acc)
-
-    Y_pred_f1 = (np.array(S) >= f1_threshold).astype(int)
-    F1 = f1_score(Y, Y_pred_f1)
-
-    test_loss = np.average(test_losses)
-    return Y, S, test_loss, AUC, Accuracy, F1
+    if tune:
+        metrics = {"auc": "val_auc", "loss": "val_loss"}
+        callbacks.append(TuneReportCallback(metrics, on="validation_end"))
+        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=cfg['trainer']['max_epochs'], logger=tb_logger,
+                             callbacks=callbacks, enable_progress_bar=False)
+        trainer.fit(model, data_module)
+    else:
+        trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=cfg['trainer']['max_epochs'], logger=tb_logger,
+                             callbacks=callbacks, log_every_n_steps=5)
+        trainer.fit(model, data_module)
+        trainer.validate(model, data_module)
+        trainer.test(model, data_module)
+        shared_metrics["test_auc"] += [model.test_auc.item()]
+        shared_metrics["test_auprc"] += [model.test_auprc.item()]
+        shared_metrics["test_f1"] += [model.test_f1.item()]
 
 
-def split_to_dataset(split):
-    reaction_file = f"../data/drugbank/{split}_reaction.txt"
-    enzyme_file = f"../data/drugbank/{split}_enzyme.txt"
-    lines = []
-    with open(reaction_file, "r") as f:
-        reactions = f.read().splitlines()
-    with open(enzyme_file, "r") as f:
-        enzymes = f.read().splitlines()
-    assert len(reactions) == len(enzymes)
-    for i in range(len(reactions)):
-        lines.append(f"- - {reactions[i]} {enzymes[i]} 1\n")
-    reaction_neg_file = f"../data/drugbank/{split}_reaction_neg.txt"
-    enzyme_neg_file = f"../data/drugbank/{split}_enzyme_neg.txt"
-    with open(reaction_neg_file, "r") as f:
-        reactions = f.read().splitlines()
-    with open(enzyme_neg_file, "r") as f:
-        enzymes = f.read().splitlines()
-    assert len(reactions) == len(enzymes)
-    for i in range(len(reactions)):
-        lines.append(f"- - {reactions[i]} {enzymes[i]} 0")
-    random.shuffle(lines)
-    return lines
+def load_numpy_data(protein_path, molecule_path, labels_path, split_paths=None):
+    """
+    Load dataset from numpy arrays
+
+    Args:
+        protein_path: Path to protein features numpy array
+        molecule_path: Path to molecule features numpy array
+        labels_path: Path to labels numpy array
+        split_paths: Dictionary with paths to train/valid/test split indices (optional)
+
+    Returns:
+        X_drug: DataFrame with molecule features
+        X_target: DataFrame with protein features
+        DTI: DataFrame with interaction data or dictionary of DataFrames if split provided
+    """
+    # Load the numpy arrays
+    protein_features = np.load(protein_path)
+    molecule_features = np.load(molecule_path)
+    labels = np.load(labels_path)
+
+    # Create DataFrames for proteins and molecules
+    protein_ids = [f"protein_{i}" for i in range(protein_features.shape[0])]
+    molecule_ids = [f"molecule_{i}" for i in range(molecule_features.shape[0])]
+
+    X_target = pd.DataFrame(protein_features, index=protein_ids)
+    X_drug = pd.DataFrame(molecule_features, index=molecule_ids)
+
+    # If we don't have predefined splits
+    if split_paths is None:
+        # Create DTI DataFrame with all interactions
+        interactions = []
+        for i, protein_id in enumerate(protein_ids):
+            for j, molecule_id in enumerate(molecule_ids):
+                label_idx = i * len(molecule_ids) + j
+                if label_idx < len(labels):
+                    interactions.append({
+                        'Drug': molecule_id,
+                        'Target': protein_id,
+                        'Label': int(labels[label_idx])
+                    })
+
+        DTI = pd.DataFrame(interactions)
+        return X_drug, X_target, DTI
+    else:
+        # Load the split indices
+        train_indices = np.load(split_paths['train'])
+        valid_indices = np.load(split_paths['valid'])
+        test_indices = np.load(split_paths['test'])
+
+        # Create separate DTI DataFrames for each split
+        DTI = {}
+
+        # Helper function to create DTI DataFrame from indices
+        def create_dti_from_indices(indices):
+            interactions = []
+            for idx in indices:
+                # Convert flattened index to protein and molecule indices
+                # This assumes a specific ordering - adjust as needed for your data
+                protein_idx = idx // len(molecule_ids)
+                molecule_idx = idx % len(molecule_ids)
+
+                if protein_idx < len(protein_ids) and molecule_idx < len(molecule_ids):
+                    interactions.append({
+                        'Drug': molecule_ids[molecule_idx],
+                        'Target': protein_ids[protein_idx],
+                        'Label': int(labels[idx])
+                    })
+
+            return pd.DataFrame(interactions)
+
+        # Create DTI DataFrames for each split
+        for i, (split_name, indices) in enumerate(zip(['train', 'valid', 'test'],
+                                                      [train_indices, valid_indices, test_indices])):
+            DTI[i] = create_dti_from_indices(indices)
+
+        return X_drug, X_target, DTI
+
+
+_HYDRA_PARAMS = {
+    "version_base": "1.3",
+    "config_path": "configs",
+    "config_name": "config-name",
+}
+
+
+@hydra.main(**_HYDRA_PARAMS)
+def main(cfg) -> Optional[float]:
+    logger, logger_dir = utils.get_logger(OmegaConf.to_container(cfg))
+    new_dir = logger_dir.split('run')[0]
+
+    # Load data from numpy arrays instead of using PREPROCESS
+    # Adjust paths to your numpy files
+    numpy_data_paths = {
+        'protein': 'path/to/protein_features.npy',
+        'molecule': 'path/to/molecule_features.npy',
+        'labels': 'path/to/labels.npy',
+        'splits': {
+            'train': 'path/to/train_indices.npy',
+            'valid': 'path/to/valid_indices.npy',
+            'test': 'path/to/test_indices.npy'
+        }
+    }
+
+    # Load numpy data
+    X_drug, X_target, DTI = load_numpy_data(
+        numpy_data_paths['protein'],
+        numpy_data_paths['molecule'],
+        numpy_data_paths['labels'],
+        numpy_data_paths['splits']
+    )
+
+    # The code below remains mostly the same
+    cfg = OmegaConf.to_container(cfg)
+
+    manager = Manager()
+    shared_metrics = manager.dict()
+    shared_metrics["test_auc"], shared_metrics["test_auprc"], shared_metrics["test_f1"] = [], [], []
+
+    if cfg['tuning']['param_search']['tune']:
+        optuna_search = OptunaSearch(
+            metric="auc",
+            mode="max",
+        )
+
+        asha_scheduler = ASHAScheduler(
+            time_attr='training_iteration',
+            metric='auc',
+            mode='max',
+            max_t=100,
+            grace_period=10,
+        )
+
+        # check if DTI is a dict, it will be for other presplitted datasets
+        if isinstance(DTI, dict):
+            DTI = DTI[0]
+        dataset = utils.get_dataset(cfg, X_drug, X_target, DTI)
+        cfg = utils.setup_config_tune(cfg['tuning']['param_search']['search_space'], cfg)
+        ray.init()
+        trainable = tune.with_parameters(train, dataset=dataset, shared_metrics=None, tune=True)
+        analysis = tune.run(
+            trainable,
+            local_dir="/data/tanvir/DTI",
+            resources_per_trial={"gpu": 0.5},
+            config=cfg,
+            num_samples=100,
+            search_alg=optuna_search,
+            scheduler=asha_scheduler,
+        )
+        best_trial = analysis.get_best_trial("auc", mode="max")
+        print("Best Hyperparameters:")
+        print(best_trial.config)
+        train(best_trial.config, dataset, shared_metrics)
+        ray.shutdown()
+    else:
+        """
+        set best parameters file for the experiment and update model configs from that file 
+        """
+        cfg = utils.update_best_param(cfg)
+        if cfg['multiprocessing']['multiprocessing']:
+            X_drug_orig, X_target_orig, DTI_orig = X_drug.copy(), X_target.copy(), DTI.copy()
+            dataset = {}
+            for num in range(cfg['multiprocessing']['num_process']):
+                if isinstance(DTI_orig, dict):
+                    X_drug, X_target, DTI = X_drug_orig.copy(), X_target_orig.copy(), DTI_orig[num].copy()
+                else:
+                    X_drug, X_target, DTI = X_drug_orig.copy(), X_target_orig.copy(), DTI_orig.copy()
+
+                dataset[num] = utils.get_dataset(cfg, X_drug, X_target, DTI, ddi=None, skipped=None)
+            # find tst_ind from all dataset
+            test_ind = []
+            for num in range(cfg['multiprocessing']['num_process']):
+                test_ind += dataset[num]['test'].label.tolist()
+            print(np.unique(test_ind, return_counts=True))
+
+            processes = []
+            for num in range(cfg['multiprocessing']['num_process']):
+                p = multiprocessing.Process(target=train, args=(cfg, dataset[num], shared_metrics))
+                processes.append(p)
+
+                if len(processes) >= cfg['multiprocessing']['concurrent_process']:
+                    for batch_process in processes:
+                        batch_process.start()
+                    for batch_process in processes:
+                        batch_process.join()
+                    processes = []
+
+            for p in processes:
+                p.start()
+            for p in processes:
+                p.join()
+
+            print("All processes have finished.")
+
+            logger.info(shared_metrics["test_auc"])
+            logger.info(shared_metrics["test_auprc"])
+            logger.info(shared_metrics["test_f1"])
+            logger.info(f'Mean test AUC: {np.mean(shared_metrics["test_auc"]):.4f}')
+            logger.info(f'Mean test AUPRC: {np.mean(shared_metrics["test_auprc"]):.4f}')
+            logger.info(f'Mean test F1: {np.mean(shared_metrics["test_f1"]):.4f}')
+            new_dir = f'{new_dir}/run_{np.mean(shared_metrics["test_auc"]):.4f}/'
+            os.rename(logger_dir, new_dir)
+
+        else:
+            pl.seed_everything(seed=42)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
+            dataset = utils.get_dataset(cfg, X_drug, X_target, DTI, ddi=None, skipped=None)
+            train(cfg, dataset, shared_metrics)
+
+            test_auc = [shared_metrics["test_auc"]]
+            test_auprc = [shared_metrics["test_auprc"]]
+            test_f1 = [shared_metrics["test_f1"]]
+            logger.info(f'Test AUC: {np.mean(test_auc):.4f}')
+            logger.info(f'Test AUPRC: {np.mean(test_auprc):.4f}')
+            logger.info(f'Test F1: {np.mean(test_f1):.4f}')
+            new_dir = f'{new_dir}/run_{np.mean(test_auc):.4f}/'
+            os.rename(logger_dir, new_dir)
 
 
 if __name__ == "__main__":
-    """select seed"""
-    SEED = 1234
-    random.seed(SEED)
-    torch.manual_seed(SEED)
-    torch.cuda.manual_seed_all(SEED)
-    # torch.backends.cudnn.deterministic = True
-
-    """init hyperparameters"""
-    hp = hyperparameter()
-
-    # random shuffle
-    AUC_List_stable, Accuracy_List_stable, F1_List_stable = [], [], []
-
-    train_dataset = split_to_dataset("train")
-    valid_dataset = split_to_dataset("valid")
-    test_dataset = split_to_dataset("test")
-    train_dataset = CustomDataSet(train_dataset)
-    valid_dataset = CustomDataSet(valid_dataset)
-    test_dataset = CustomDataSet(test_dataset)
-
-    train_dataset_load = DataLoader(train_dataset, batch_size=hp.Batch_size, shuffle=True, num_workers=0,
-                                    collate_fn=collate_fn)
-    valid_dataset_load = DataLoader(valid_dataset, batch_size=hp.Batch_size, shuffle=False, num_workers=0,
-                                    collate_fn=collate_fn)
-    test_dataset_load = DataLoader(test_dataset, batch_size=hp.Batch_size, shuffle=False, num_workers=0,
-                                   collate_fn=collate_fn)
-
-    """ create model"""
-    model = AttentionDTI(hp).cuda()
-    """weight initialize"""
-    weight_p, bias_p = [], []
-    for p in model.parameters():
-        if p.dim() > 1:
-            nn.init.xavier_uniform_(p)
-    for name, p in model.named_parameters():
-        if 'bias' in name:
-            bias_p += [p]
-        else:
-            weight_p += [p]
-
-    optimizer = optim.AdamW(
-        [{'params': weight_p, 'weight_decay': hp.weight_decay}, {'params': bias_p, 'weight_decay': 0}],
-        lr=hp.Learning_rate)
-
-    scheduler = optim.lr_scheduler.CyclicLR(optimizer, base_lr=hp.Learning_rate, max_lr=hp.Learning_rate * 10,
-                                            cycle_momentum=False,
-                                            step_size_up=len(train_dataset))
-    Loss = nn.CrossEntropyLoss()
-
-    save_path = "./" + DATASET
-    note = ''
-    writer = SummaryWriter(log_dir=save_path, comment=note)
-
-    """Output files."""
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    file_results = save_path + '/The_results_of_whole_dataset.txt'
-
-    with open(file_results, 'w') as f:
-        hp_attr = '\n'.join(['%s:%s' % item for item in hp.__dict__.items()])
-        f.write(hp_attr + '\n')
-
-    early_stopping = EarlyStopping(savepath=save_path, patience=hp.Patience, verbose=True, delta=0)
-
-    """Start training."""
-    print('Training...')
-    start = timeit.default_timer()
-
-    # Initialize best thresholds
-    best_acc_threshold = 0.5
-    best_f1_threshold = 0.5
-
-    for epoch in range(1, hp.Epoch + 1):
-        # Train
-        train_pbar = tqdm(
-            enumerate(BackgroundGenerator(train_dataset_load)),
-            total=len(train_dataset_load))
-
-        train_losses_in_epoch = []
-        model.train()
-        for train_i, train_data in train_pbar:
-            '''data preparation '''
-            train_compounds, train_proteins, train_labels = train_data
-            train_compounds = train_compounds.cuda()
-            train_proteins = train_proteins.cuda()
-            train_labels = train_labels.cuda()
-
-            optimizer.zero_grad()
-
-            predicted_interaction = model(train_compounds, train_proteins)
-            train_loss = Loss(predicted_interaction, train_labels)
-            train_losses_in_epoch.append(train_loss.item())
-            train_loss.backward()
-            optimizer.step()
-            scheduler.step()
-
-        train_loss_a_epoch = np.average(train_losses_in_epoch)
-        writer.add_scalar('Train Loss', train_loss_a_epoch, epoch)
-
-        # Validate and find optimal thresholds
-        model.eval()
-        valid_losses_in_epoch = []
-        Y_valid, S_valid = [], []
-
-        with torch.no_grad():
-            valid_pbar = tqdm(
-                enumerate(BackgroundGenerator(valid_dataset_load)),
-                total=len(valid_dataset_load))
-
-            for valid_i, valid_data in valid_pbar:
-                valid_compounds, valid_proteins, valid_labels = valid_data
-                valid_compounds = valid_compounds.cuda()
-                valid_proteins = valid_proteins.cuda()
-                valid_labels = valid_labels.cuda()
-
-                valid_scores = model(valid_compounds, valid_proteins)
-                valid_loss = Loss(valid_scores, valid_labels)
-                valid_labels = valid_labels.to('cpu').data.numpy()
-                valid_scores = F.softmax(valid_scores, 1).to('cpu').data.numpy()
-                valid_scores = valid_scores[:, 1]  # Probability for positive class
-
-                valid_losses_in_epoch.append(valid_loss.item())
-                Y_valid.extend(valid_labels)
-                S_valid.extend(valid_scores)
-
-        # Find optimal thresholds on validation set
-        best_acc_threshold, best_valid_acc = find_optimal_threshold(Y_valid, S_valid, 'accuracy')
-        best_f1_threshold, best_valid_f1 = find_optimal_threshold(Y_valid, S_valid, 'f1')
-
-        # Calculate validation metrics
-        valid_auc = roc_auc_score(Y_valid, S_valid)
-        valid_loss_a_epoch = np.average(valid_losses_in_epoch)
-
-        # Test on validation set with optimal thresholds
-        _, _, _, valid_auc, valid_acc, valid_f1 = test_precess(
-            model, valid_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
-
-        # Test on test set with optimal thresholds from validation
-        _, S_test, test_loss, test_auc, test_acc, test_f1 = test_precess(
-            model, test_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
-
-        # Log all to tensorboard
-        writer.add_scalar('Valid Loss', valid_loss_a_epoch, epoch)
-        writer.add_scalar('Valid AUC', valid_auc, epoch)
-        writer.add_scalar('Valid Best Accuracy', valid_acc, epoch)
-        writer.add_scalar('Valid Best F1', valid_f1, epoch)
-        writer.add_scalar('Test Loss', test_loss, epoch)
-        writer.add_scalar('Test AUC', test_auc, epoch)
-        writer.add_scalar('Test Best Accuracy', test_acc, epoch)
-        writer.add_scalar('Test Best F1', test_f1, epoch)
-        writer.add_scalar('Accuracy Threshold', best_acc_threshold, epoch)
-        writer.add_scalar('F1 Threshold', best_f1_threshold, epoch)
-        writer.add_scalar('Learn Rate', optimizer.param_groups[0]['lr'], epoch)
-
-        # Print progress
-        epoch_len = len(str(hp.Epoch))
-        print_msg = (f'[{epoch:>{epoch_len}}/{hp.Epoch:>{epoch_len}}] ' +
-                     f'train_loss: {train_loss_a_epoch:.5f} ' +
-                     f'valid_loss: {valid_loss_a_epoch:.5f} ' +
-                     f'valid_AUC: {valid_auc:.5f} ' +
-                     f'valid_best_acc: {valid_acc:.5f} (t={best_acc_threshold:.3f}) ' +
-                     f'valid_best_F1: {valid_f1:.5f} (t={best_f1_threshold:.3f})')
-        print(print_msg)
-
-        # Print test set results
-        test_msg = (f'Test results: ' +
-                    f'test_loss: {test_loss:.5f} ' +
-                    f'test_AUC: {test_auc:.5f} ' +
-                    f'test_best_acc: {test_acc:.5f} ' +
-                    f'test_best_F1: {test_f1:.5f}')
-        print(test_msg)
-
-        # Early stopping based on validation loss
-        early_stopping(valid_loss_a_epoch, model, epoch)
-        if early_stopping.early_stop:
-            print("Early stopping triggered!")
-            break
-
-    # Load the best model for final evaluation
-    print("Loading best model for final evaluation...")
-    model.load_state_dict(torch.load(f"{save_path}/checkpoint.pt"))
-
-    # Final evaluation on test set
-    _, S_test, _, test_auc, test_acc, test_f1 = test_precess(
-        model, test_dataset_load, Loss, best_acc_threshold, best_f1_threshold)
-
-    print(f"Final evaluation on test set (with best validation thresholds):")
-    print(f"AUC: {test_auc:.5f}")
-    print(f"Accuracy: {test_acc:.5f} (threshold={best_acc_threshold:.3f})")
-    print(f"F1 Score: {test_f1:.5f} (threshold={best_f1_threshold:.3f})")
-
-    # Save final results
-    AUC_List_stable.append(test_auc)
-    Accuracy_List_stable.append(test_acc)
-    F1_List_stable.append(test_f1)
-
-    with open(save_path + "/The_results_of_whole_dataset.txt", 'a') as f:
-        f.write("\nFinal Evaluation Results\n")
-        f.write(f"AUC: {test_auc:.5f}\n")
-        f.write(f"Best Accuracy: {test_acc:.5f} (threshold={best_acc_threshold:.3f})\n")
-        f.write(f"Best F1 Score: {test_f1:.5f} (threshold={best_f1_threshold:.3f})\n")
-
-# Show final results
-show_result(DATASET, "stable", Accuracy_List_stable, F1_List_stable, AUC_List_stable)
+    main()
