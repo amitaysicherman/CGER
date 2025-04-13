@@ -310,7 +310,7 @@ if __name__ == "__main__":
         from eval_drug_bank import evaluate_model, get_data
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
-                                                            gen_mol=args.gen_mol)
+                                                            gen_mol=args.gen_mol,cold_smiles=args.cold_smiles,cold_fasta=args.cold_fasta)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 

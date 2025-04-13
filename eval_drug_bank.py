@@ -39,8 +39,11 @@ def load_negative_files(split, mol):
     return src, tgt
 
 
-def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False):
-    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol)
+def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False,cold_smiles=0, cold_fasta=0):
+    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol,
+                                                                                     cold_smiles=cold_smiles,
+                                                                                     cold_fasta=cold_fasta)
+
     pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
