@@ -96,17 +96,21 @@ class SrcTgtDataset(TorchDataset):
             labels=self.labels[idx],
         )
 
-
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 def compute_metrics(eval_preds):
     predictions, labels = eval_preds
     predictions = predictions.argmax(-1)
     predictions = predictions.flatten()
     labels = labels.flatten()
-    acc = (predictions == labels).sum() / len(labels)
-    precision = (predictions * labels).sum() / predictions.sum()
-    recall = (predictions * labels).sum() / labels.sum()
-    f1 = 2 * precision * recall / (precision + recall)
-    auc = (predictions == labels).sum() / len(labels)
+
+    acc= accuracy_score(labels, predictions)
+    precision = precision_score(labels, predictions)
+    recall = recall_score(labels, predictions)
+    f1 = f1_score(labels, predictions)
+    auc = roc_auc_score(labels, predictions)
+    
+
+
     return {
         "accuracy": acc,
         "precision": precision,
