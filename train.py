@@ -365,6 +365,8 @@ if __name__ == "__main__":
         output_dir += "_cs"
     if args.cold_fasta:
         output_dir += "_cf"
+    if args.random_tgt:
+        output_dir += "_rnd"
     if args.level == "drugbank":
         output_dir = output_dir.replace("results", "results_db")
     logs_dir = output_dir.replace("results", "logs")
