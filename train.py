@@ -402,6 +402,7 @@ if __name__ == "__main__":
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics_func
     )
+    print(trainer.evaluate(eval_dataset["valid"]))
     # Train model
     print("Training model...")
 
