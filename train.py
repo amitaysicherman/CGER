@@ -305,6 +305,7 @@ if __name__ == "__main__":
                                                                            gen_mol=args.gen_mol)
 
     # Create datasets and dataloaders
+    random_replace = None
     if args.random_tgt:
         random_replace = RamdomReplace(tgt_tokenizer)
         tgt_train = [random_replace.get_random_tokens(x) for x in tgt_train]
@@ -338,7 +339,7 @@ if __name__ == "__main__":
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                             gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
-                                                            cold_fasta=args.cold_fasta)
+                                                            cold_fasta=args.cold_fasta,random_replace=random_replace)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
