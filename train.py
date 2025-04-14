@@ -20,6 +20,30 @@ num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
 ENCODER_DIM = 256
 
 
+def get_random_tokens(tokenizer, num_tokens=10):
+    """Get random tokens from the tokenizer"""
+
+    vocab_size = len(tokenizer)
+    random_tokens = np.random.randint(0, vocab_size, num_tokens)
+    return random_tokens
+
+
+class RamdomReplace:
+    def __init__(self, tokenizer, num_tokens=512):
+        self.tokenizer = tokenizer
+        self.vocab_size = len(tokenizer)
+        self.num_tokens = num_tokens
+        self.memory = {}
+
+    def get_random_tokens(self, text):
+        if text in self.memory:
+            return self.memory[text]
+        random_tokens = np.random.randint(0, self.vocab_size, self.num_tokens)
+        random_text = self.tokenizer.decode(random_tokens)
+        self.memory[text] = random_text
+        return random_text
+
+
 def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False):
     if gen_mol:
         assert drugbank, "gen_mol can only be used with drugbank"
@@ -83,7 +107,6 @@ def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0):
         base_dir += "_cs"
     if cold_fasta:
         base_dir += "_cf"
-
 
     src_train = load_file(pjoin(base_dir, "train_reaction.txt"))
     tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt"))
@@ -270,18 +293,24 @@ if __name__ == "__main__":
     parser.add_argument("--gen_mol", type=int, default=0)
     parser.add_argument("--cold_smiles", type=int, default=0)
     parser.add_argument("--cold_fasta", type=int, default=0)
-
+    parser.add_argument("--random_tgt", type=int, default=0)
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
-                                                                                   cold_smiles=args.cold_smiles,
-                                                                                   cold_fasta=args.cold_fasta)
+                                                                                cold_smiles=args.cold_smiles,
+                                                                                cold_fasta=args.cold_fasta)
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level == "drugbank",
                                                                            gen_mol=args.gen_mol)
 
     # Create datasets and dataloaders
+    if args.random_tgt:
+        random_replace = RamdomReplace(tgt_tokenizer)
+        tgt_train = [random_replace.get_random_tokens(x) for x in tgt_train]
+        tgt_valid = [random_replace.get_random_tokens(x) for x in tgt_valid]
+        tgt_test = [random_replace.get_random_tokens(x) for x in tgt_test]
+
     train_dataset = SrcTgtDataset(src_train, tgt_train, src_tokenizer, tgt_tokenizer, src_model,
                                   pooling=args.pooling)
     valid_dataset = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model,
@@ -308,7 +337,8 @@ if __name__ == "__main__":
         from eval_drug_bank import evaluate_model, get_data
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
-                                                            gen_mol=args.gen_mol,cold_smiles=args.cold_smiles,cold_fasta=args.cold_fasta)
+                                                            gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
+                                                            cold_fasta=args.cold_fasta)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
