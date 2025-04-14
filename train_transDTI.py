@@ -17,13 +17,13 @@ class TransDTI(torch.nn.Module):
 
         self.prot_branch = nn.Sequential(
             nn.Linear(1280, 1280),
-            nn.BatchNorm1d(1280)  # batch_normalization: BatchNormalization
+            # nn.BatchNorm1d(1280)  # batch_normalization: BatchNormalization
         )
 
         # Branch 2
         self.mol_branch = nn.Sequential(
             nn.Linear(768, 768),
-            nn.BatchNorm1d(768)
+            # nn.BatchNorm1d(768)
         )
 
         self.post_concat = nn.Sequential(
