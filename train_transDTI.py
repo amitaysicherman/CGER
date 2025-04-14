@@ -42,48 +42,48 @@ class TransDTI(torch.nn.Module):
 
 
 class SrcTgtDataset(TorchDataset):
-    def __init__(self, src_texts, tgt_texts, labels, src_tokenizer, tgt_tokenizer, src_encoder, tgt_encoder,
+    def __init__(self, mol_texts, prot_texts, labels, mol_tokenizer, prot_tokenizer, mol_encoder, prot_encoder,
                  max_length=512):
-        self.src_texts = src_texts
-        self.tgt_texts = tgt_texts
+        self.mol_texts = mol_texts
+        self.prot_texts = prot_texts
         self.max_length = max_length
-        self.src_tokenizer = src_tokenizer
-        self.tgt_tokenizer = tgt_tokenizer
-        self.src_encoder = src_encoder
-        self.src_memory = {}
-        self.tgt_encoder = tgt_encoder
-        self.tgt_memory = {}
+        self.mol_tokenizer = mol_tokenizer
+        self.prot_tokenizer = prot_tokenizer
+        self.mol_encoder = mol_encoder
+        self.mol_memory = {}
+        self.prot_encoder = prot_encoder
+        self.prot_memory = {}
 
         self.labels = labels
 
     def __len__(self):
-        return len(self.src_texts)
+        return len(self.mol_texts)
 
     def __getitem__(self, idx):
-        src_text = self.src_texts[idx]
-        tgt_text = self.tgt_texts[idx]
-        if src_text not in self.src_memory:
-            src_tokens = self.src_tokenizer(
-                src_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
+        mol_text = self.mol_texts[idx]
+        prot_text = self.prot_texts[idx]
+        if mol_text not in self.mol_memory:
+            mol_tokens = self.mol_tokenizer(
+                mol_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
             )
-            src_tokens = {k: v.to(device) for k, v in src_tokens.items()}
-            src_encoder_outputs = self.src_encoder(**src_tokens)
-            src_encoder_outputs = src_encoder_outputs.last_hidden_state.mean(dim=1)
-            src_encoder_outputs = src_encoder_outputs.squeeze(0).detach().cpu()
-            self.src_memory[src_text] = src_encoder_outputs
-        if tgt_text not in self.tgt_memory:
-            tgt_tokens = self.tgt_tokenizer(
-                tgt_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
+            mol_tokens = {k: v.to(device) for k, v in mol_tokens.items()}
+            mol_encoder_outputs = self.mol_encoder(**mol_tokens)
+            mol_encoder_outputs = mol_encoder_outputs.last_hidden_state.mean(dim=1)
+            mol_encoder_outputs = mol_encoder_outputs.squeeze(0).detach().cpu()
+            self.mol_memory[mol_text] = mol_encoder_outputs
+        if prot_text not in self.prot_memory:
+            prot_tokens = self.prot_tokenizer(
+                prot_text, max_length=self.max_length, truncation=True, padding="max_length", return_tensors="pt"
             )
-            tgt_tokens = {k: v.to(device) for k, v in tgt_tokens.items()}
-            tgt_encoder_outputs = self.tgt_encoder(**tgt_tokens)
-            tgt_encoder_outputs = tgt_encoder_outputs.pooler_output
-            tgt_encoder_outputs = tgt_encoder_outputs.detach().cpu()
-            self.tgt_memory[tgt_text] = tgt_encoder_outputs
+            prot_tokens = {k: v.to(device) for k, v in prot_tokens.items()}
+            prot_encoder_outputs = self.prot_encoder(**prot_tokens)
+            prot_encoder_outputs = prot_encoder_outputs.pooler_output
+            prot_encoder_outputs = prot_encoder_outputs.detach().cpu()
+            self.prot_memory[prot_text] = prot_encoder_outputs
 
         return dict(
-            prot=self.tgt_memory[tgt_text],
-            mol=self.src_memory[src_text],
+            prot=self.prot_memory[prot_text],
+            mol=self.mol_memory[mol_text],
             labels=self.labels[idx],
         )
 
@@ -146,13 +146,12 @@ if __name__ == "__main__":
     for param in mol_model.parameters():
         param.requires_grad = False
 
-    train_dataset = SrcTgtDataset(prot_train, mol_train, labels_train, prot_tokenizer, mol_tokenizer,
-                                  prot_model, mol_model)
-    valid_dataset = SrcTgtDataset(prot_valid, mol_valid, labels_valid, prot_tokenizer, mol_tokenizer,
-                                  prot_model, mol_model)
-    test_dataset = SrcTgtDataset(prot_test, mol_test, labels_test, prot_tokenizer, mol_tokenizer,
-                                 prot_model, mol_model)
-
+    train_dataset = SrcTgtDataset(mol_train, prot_train, labels_train, mol_tokenizer, prot_tokenizer, mol_model,
+                                    prot_model)
+    valid_dataset = SrcTgtDataset(mol_valid, prot_valid, labels_valid, mol_tokenizer, prot_tokenizer, mol_model,
+                                    prot_model)
+    test_dataset = SrcTgtDataset(mol_test, prot_test, labels_test, mol_tokenizer, prot_tokenizer, mol_model,
+                                    prot_model)
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
