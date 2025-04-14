@@ -186,6 +186,7 @@ if __name__ == "__main__":
         report_to="tensorboard",
         save_safetensors=False,
         auto_find_batch_size=True,
+        label_names=["labels"],
     )
 
     # Define trainer
