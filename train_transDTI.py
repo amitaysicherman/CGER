@@ -33,12 +33,17 @@ class TransDTI(torch.nn.Module):
             nn.Linear(512, 2)
         )
 
-    def forward(self, prot, mol):
+    def forward(self, prot, mol,labels=None):
         prot = self.prot_branch(prot)  # Output shape: (None, 1280)
         mol = self.mol_branch(mol)  # Output shape: (None, 768)
         concatenated = torch.cat((prot, mol), dim=-1)
         output = self.post_concat(concatenated)  # Final output shape: (None, 3)
-        return output
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(output.view(-1, 2), labels.view(-1))
+            return loss
+        else:
+            return output
 
 
 class SrcTgtDataset(TorchDataset):
