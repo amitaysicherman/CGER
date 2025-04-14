@@ -16,9 +16,10 @@ split_index=$(($SLURM_ARRAY_TASK_ID))
 #"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.0 --epochs 100 --gen_mol 1"
 #)
 configs=(
-"python train_transDTI.py --base_data drugbank"
-"python train_transDTI.py --base_data drugbank_cf"
-"python train_transDTI.py --base_data drugbank_cs"
+"python train.py --epochs 100"
+"python train.py --epochs 100 --gen_mol 1"
+"python train.py --epochs 100 --random_tgt 1"
+"python train.py --epochs 100 --gen_mol 1 --random_tgt 1"
 )
 # Get the config for the current index
 config=${configs[$split_index]}
