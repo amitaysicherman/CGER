@@ -33,17 +33,16 @@ class TransDTI(torch.nn.Module):
             nn.Linear(512, 2)
         )
 
-    def forward(self, prot, mol,labels=None):
+    def forward(self, prot, mol, labels=None):
         prot = self.prot_branch(prot)  # Output shape: (None, 1280)
         mol = self.mol_branch(mol)  # Output shape: (None, 768)
         concatenated = torch.cat((prot, mol), dim=-1)
-        output = self.post_concat(concatenated)  # Final output shape: (None, 3)
+        output = self.post_concat(concatenated)  # Final output shape: (None, 2)
+        loss = None
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss()
             loss = loss_fct(output.view(-1, 2), labels.view(-1))
-            return loss
-        else:
-            return output
+        return {"logits": output, "loss": loss}
 
 
 class SrcTgtDataset(TorchDataset):
@@ -152,11 +151,11 @@ if __name__ == "__main__":
         param.requires_grad = False
 
     train_dataset = SrcTgtDataset(mol_train, prot_train, labels_train, mol_tokenizer, prot_tokenizer, mol_model,
-                                    prot_model)
+                                  prot_model)
     valid_dataset = SrcTgtDataset(mol_valid, prot_valid, labels_valid, mol_tokenizer, prot_tokenizer, mol_model,
-                                    prot_model)
+                                  prot_model)
     test_dataset = SrcTgtDataset(mol_test, prot_test, labels_test, mol_tokenizer, prot_tokenizer, mol_model,
-                                    prot_model)
+                                 prot_model)
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
