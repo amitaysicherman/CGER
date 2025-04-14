@@ -198,6 +198,7 @@ if __name__ == "__main__":
         compute_metrics=compute_metrics,
     )
     # Train model
+    print(trainer.evaluate(eval_dataset["valid"]))
     print("Training model...")
 
     trainer.train(resume_from_checkpoint=len(glob.glob(pjoin(output_dir, "checkpoint-*"))) > 0)
