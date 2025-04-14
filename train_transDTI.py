@@ -82,8 +82,8 @@ class SrcTgtDataset(TorchDataset):
             self.tgt_memory[tgt_text] = tgt_encoder_outputs
 
         return dict(
-            tgt_encoder_outputs=self.tgt_memory[tgt_text],
-            src_encoder_outputs=self.src_memory[src_text],
+            prot=self.tgt_memory[tgt_text],
+            mol=self.src_memory[src_text],
             labels=self.labels[idx],
         )
 
@@ -183,6 +183,7 @@ if __name__ == "__main__":
         report_to="tensorboard",
         save_safetensors=False,
         auto_find_batch_size=True,
+        label_names=["labels"],
     )
 
     # Define trainer
