@@ -77,7 +77,7 @@ class SrcTgtDataset(TorchDataset):
             )
             prot_tokens = {k: v.to(device) for k, v in prot_tokens.items()}
             prot_encoder_outputs = self.prot_encoder(**prot_tokens)
-            prot_encoder_outputs = prot_encoder_outputs.pooler_output
+            prot_encoder_outputs = prot_encoder_outputs.pooler_output.squeeze(0)
             prot_encoder_outputs = prot_encoder_outputs.detach().cpu()
             self.prot_memory[prot_text] = prot_encoder_outputs
 
