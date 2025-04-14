@@ -159,7 +159,7 @@ if __name__ == "__main__":
     train_small_indices = np.random.choice(len(train_dataset), len(test_dataset), replace=False)
     train_small_dataset = torch.utils.data.Subset(train_dataset, train_small_indices)
 
-    eval_dataset = {"test": test_dataset, "train": train_small_dataset, "valid": valid_dataset},
+    eval_dataset = {"test": test_dataset, "train": train_small_dataset, "valid": valid_dataset}
     metric_for_best_model = "eval_valid_auc"
 
     model = TransDTI()
