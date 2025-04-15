@@ -29,9 +29,11 @@ def get_random_tokens(tokenizer, num_tokens=10):
 
 
 class RamdomReplace:
-    def __init__(self, tokenizer, num_tokens=512):
+    def __init__(self, tokenizer, num_tokens=512, vocab_size=0):
         self.tokenizer = tokenizer
-        self.vocab_size = len(tokenizer)
+        if vocab_size == 0:
+            vocab_size = len(tokenizer)
+        self.vocab_size = vocab_size
         self.num_tokens = num_tokens
         self.memory = {}
 
@@ -307,7 +309,8 @@ if __name__ == "__main__":
     # Create datasets and dataloaders
     random_replace = None
     if args.random_tgt:
-        random_replace = RamdomReplace(tgt_tokenizer)
+        vocab_siz = len(tgt_tokenizer) if args.random_tgt == 1 else args.random_tgt
+        random_replace = RamdomReplace(tgt_tokenizer, vocab_size=vocab_siz)
         tgt_train = [random_replace.get_random_tokens(x) for x in tgt_train]
         tgt_valid = [random_replace.get_random_tokens(x) for x in tgt_valid]
         tgt_test = [random_replace.get_random_tokens(x) for x in tgt_test]
@@ -339,7 +342,7 @@ if __name__ == "__main__":
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                             gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
-                                                            cold_fasta=args.cold_fasta,random_replace=random_replace)
+                                                            cold_fasta=args.cold_fasta, random_replace=random_replace)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
