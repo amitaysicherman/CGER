@@ -10,18 +10,18 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
-"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 100 --cold_smiles 1"
-"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_smiles 1"
-"python train.py --pooling 1 --bottleneck_dim 0 --size 'l' --dropout 0.2 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 1 --bottleneck_dim 0 --size 'l' --dropout 0.2 --epochs 100 --cold_smiles 1"
-"python train.py --pooling 1 --bottleneck_dim 0 --size 'm' --dropout 0.0 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 1 --bottleneck_dim 0 --size 'm' --dropout 0.0 --epochs 100 --cold_smiles 1"
-"python train.py --pooling 0 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 0 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 100 --cold_smiles 1"
-"python train.py --pooling 0 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_fasta 1 --gen_mol 1"
-"python train.py --pooling 0 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_smiles 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 50 --cold_smiles 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 50 --cold_smiles 1"
+"python train.py --pooling 1 --bottleneck_dim 0 --size 'l' --dropout 0.2 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 1 --bottleneck_dim 0 --size 'l' --dropout 0.2 --epochs 50 --cold_smiles 1"
+"python train.py --pooling 1 --bottleneck_dim 0 --size 'm' --dropout 0.0 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 1 --bottleneck_dim 0 --size 'm' --dropout 0.0 --epochs 50 --cold_smiles 1"
+"python train.py --pooling 0 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 0 --bottleneck_dim 128 --size 'l' --dropout 0.2 --epochs 50 --cold_smiles 1"
+"python train.py --pooling 0 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 50 --cold_fasta 1 --gen_mol 1"
+"python train.py --pooling 0 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 50 --cold_smiles 1"
 )
 
 # Get the config for the current index
