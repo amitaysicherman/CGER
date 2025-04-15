@@ -15,10 +15,13 @@ bounds = [-0.5, 0.5, 1.5, 2.5]
 norm = mcolors.BoundaryNorm(bounds, custom_cmap.N)
 
 sns.set(style="whitegrid")
+use_mols = True
 
-src_train, tgt_train, src_test, tgt_test = load_files(level="easy")
-print(src_train[tgt_train.index("MIEVLLVTICLAVFPYPGSSIILESGNVDDYEVVYPQKLTALPKGAVQPKYEDAMQYEFKVNGEPVVLHLEKNKGLFSEDYSETHYSPDGREITTYPSVEDHCYYHGRIQNDADSTASISACDGLKGYFKLQGETYLIEPLELSDSEAHAVFKYENVEKEDEAPKMCGVTQNWESDESIKKASQLYLTPEQQRFPQRYIELAIVVDHGMYTKYSSNFKKIRKRVHQMVNNINEMYRPLNIAITLSLLDVWSEKDLITMQAVAPTTARLFGDWRETVLLKQKDHDHAQLLTDINFTGNTIGWAYMGGMCNAKNSVGIVKDHSSNVFMVAVTMTHEIGHNLGMEHDDKDKCKCEACIMSAVISDKPSKLFSDCSKDYYQTFLTNSKPQCIINAPLRTDTVSTPVSGNEFLEAGEECDCGSPSNPCCDAATCKLRPGAQCADGLCCDQCRFKKKRTICRRARGDNPDDRCTGQSADCPRNS")])
-esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t36_3B_UR50D", trust_remote_code=True)
+src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=use_mols)
+if use_mols:
+    esm_tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+else:
+    esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t36_3B_UR50D", trust_remote_code=True)
 trie = build_trie(list(set(tgt_train + tgt_test)), esm_tokenizer)
 all_enzyme_sequences = list(set(tgt_train + tgt_test))
 
@@ -32,10 +35,15 @@ for ii, seq in enumerate(tqdm(all_enzyme_sequences)):
     active_seq_len.append((mask_in.sum(dim=1) > 1).sum().item())
     last_mask_in = (mask_in.sum(dim=1) > 1)
 
-    if sum(last_mask_in[5:28]) >= 2:
+    if sum(last_mask_in[5:]) >= 2:
         print(ii, f"seq: {seq}")
 
         fig, ax = plt.subplots(figsize=(10, 5))
+
+        # find the indexes in the mask that are not 0
+        mask_to_plot = mask_in[(mask_in.sum(dim=1) >= 1)]
+
+
         y_labels = [esm_tokenizer.decode([i]) for i in range(esm_tokenizer.vocab_size)][4:-8]
         mask_to_plot = mask_in.cpu().numpy().T[4:-8, :30]
 
