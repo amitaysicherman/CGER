@@ -274,10 +274,11 @@ class EndToEndModel(torch.nn.Module):
         encoder_outputs = self.encoder(input_ids=src_input_ids, attention_mask=src_attention_mask)
 
         if self.pooling:
-            if hasattr(self.encoder, "pooler_output"):
-                encoder_hidden_states = encoder_outputs.pooler_output
+            if hasattr(encoder_outputs, "pooler_output") and encoder_outputs.pooler_output is not None:
+                encoder_hidden_states = encoder_outputs.pooler_output.unsqueeze(1)
             else:
                 encoder_hidden_states = encoder_outputs.last_hidden_state.mean(dim=1)
+            encoder_hidden_states = encoder_hidden_states.unsqueeze(1)  # Add sequence dimension [batch, 1, hidden_dim]
             encoder_attention_mask = torch.ones(src_attention_mask.shape[0], 1).to(src_attention_mask.device)
         else:
             encoder_hidden_states = encoder_outputs.last_hidden_state
