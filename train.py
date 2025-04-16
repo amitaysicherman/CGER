@@ -269,7 +269,7 @@ class EndToEndModel(torch.nn.Module):
                 encoder_dim, self.decoder.config.hidden_size
             )
 
-    def forward(self, src_input_ids, src_attention_mask, input_ids, attention_mask, labels=None,encoder_outputs=None):
+    def forward(self, src_input_ids, src_attention_mask, input_ids, attention_mask, labels=None,encoder_outputs=None,encoder_attention_mask=None):
         # Run through encoder
         encoder_outputs = self.encoder(input_ids=src_input_ids, attention_mask=src_attention_mask)
 
