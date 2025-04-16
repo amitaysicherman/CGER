@@ -30,7 +30,7 @@ def load_negative_files(split, mol,cold_smiles=0, cold_fasta=0, random_replace=N
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False,cold_smiles=0, cold_fasta=0,
-             random_replace=None):
+             random_replace=None,train_encoder=False):
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol,
                                                                                      cold_smiles=cold_smiles,
                                                                                      cold_fasta=cold_fasta)
@@ -39,14 +39,22 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
         tgt_valid = [random_replace.get_random_tokens(x) for x in tgt_valid]
         tgt_test = [random_replace.get_random_tokens(x) for x in tgt_test]
 
-    pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
-    pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    if train_encoder:
+        pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
+        pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
+    else:
+        pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+        pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
     src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace)
 
     src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace)
-    neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
-    neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+    if train_encoder:
+        neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
+        neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
+    else:
+        neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
+        neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
     if return_files:
         return pos_valid, neg_valid, pos_test, neg_test, tgt_train
     return pos_valid, neg_valid, pos_test, neg_test

@@ -269,7 +269,7 @@ class EndToEndModel(torch.nn.Module):
                 encoder_dim, self.decoder.config.hidden_size
             )
 
-    def forward(self, src_input_ids, src_attention_mask, input_ids, attention_mask, labels=None,encoder_outputs=None,encoder_attention_mask=None):
+    def forward(self, src_input_ids, src_attention_mask, input_ids, attention_mask, labels=None):
         # Run through encoder
         encoder_outputs = self.encoder(input_ids=src_input_ids, attention_mask=src_attention_mask)
 
@@ -473,7 +473,8 @@ if __name__ == "__main__":
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                             gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
-                                                            cold_fasta=args.cold_fasta, random_replace=random_replace)
+                                                            cold_fasta=args.cold_fasta, random_replace=random_replace,
+                                                            train_encoder=args.train_encoder)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
