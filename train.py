@@ -283,6 +283,7 @@ class EndToEndModel(torch.nn.Module):
         else:
             encoder_hidden_states = encoder_outputs.last_hidden_state
             encoder_attention_mask = src_attention_mask
+        print(encoder_hidden_states.shape)
 
         # Project encoder outputs
         projected_encoder_hidden_states = self.encoder_project(encoder_hidden_states)
