@@ -4,7 +4,7 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=0-3
+#SBATCH --array=4-7
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
@@ -14,6 +14,11 @@ configs=(
 "python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.0 --epochs 100 --cold_smiles 1 --train_encoder 1"
 "python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.0 --epochs 100 --gen_mol 1 --train_encoder 1"
 "python train.py --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.0 --epochs 100 --train_encoder 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_fasta 1 --gen_mol 1 --train_encoder 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --cold_smiles 1 --train_encoder 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --gen_mol 1 --train_encoder 1"
+"python train.py --pooling 1 --bottleneck_dim 128 --size 'm' --dropout 0.0 --epochs 100 --train_encoder 1"
+
 )
 
 # Get the config for the current index
