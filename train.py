@@ -146,7 +146,7 @@ def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0)
         src_suffix = "_q.txt" if quantize else ".txt"
         tgt_suffix = ".txt"
     else:
-        tgt_suffix = "_q.txt" if quantize else ""
+        tgt_suffix = "_q.txt" if quantize else ".txt"
         src_suffix = ".txt"
 
     src_train = load_file(pjoin(base_dir, "train_reaction.txt".replace(".txt", src_suffix)))
@@ -238,10 +238,10 @@ class SrcTgtDataset(TorchDataset):
         else:
             return dict(
                 src_input_ids=src_input_ids,
-                src_attention_mask=src_tokens["attention_mask"].squeeze(0).cpu(),
-                input_ids=tgt_tokens["input_ids"].squeeze(0).cpu(),
-                attention_mask=tgt_tokens["attention_mask"].squeeze(0).cpu(),
-                labels=labels.squeeze(0).cpu(),
+                src_attention_mask=src_tokens["attention_mask"].squeeze(0),
+                input_ids=tgt_tokens["input_ids"].squeeze(0),
+                attention_mask=tgt_tokens["attention_mask"].squeeze(0),
+                labels=labels.squeeze(0),
             )
 
 
