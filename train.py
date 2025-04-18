@@ -21,7 +21,7 @@ ENCODER_DIM = 256
 
 
 class QuantizeTokenizer:
-    def __init__(self, max_token=20):
+    def __init__(self, max_token=15):
         self.eos_token_id = max_token
         self.pad_token_id = max_token + 1
         self.bos_token_id = max_token + 2
@@ -441,7 +441,7 @@ if __name__ == "__main__":
                                                                            gen_mol=args.gen_mol,
                                                                            train_encoder=args.train_encoder)
     if args.quantize:
-        tgt_tokenizer = QuantizeTokenizer(max_token=20)
+        tgt_tokenizer = QuantizeTokenizer()
 
     # Create datasets and dataloaders
     random_replace = None
