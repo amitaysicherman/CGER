@@ -39,7 +39,7 @@ class QuantizeTokenizer:
         return {"input_ids": seq, "attention_mask": mask}
 
     def encode(self, seq, **kwargs):
-        return self(seq, **kwargs)["input_ids"]
+        return self(seq, **kwargs)["input_ids"][0].tolist()
 
     def decode(self, seq):
         return " ".join([str(x) for x in seq])
