@@ -210,9 +210,11 @@ class SrcTgtDataset(TorchDataset):
                 else:
                     src_encoder_outputs = src_encoder_outputs.last_hidden_state.squeeze(0)
                     src_attention_mask = src_tokens["attention_mask"].squeeze(0)
+                src_encoder_outputs = src_encoder_outputs.detach().cpu()
+                src_attention_mask = src_attention_mask.detach().cpu()
 
                 # Save to memory if we pre-compute
-                self.memory[src_text] = (src_encoder_outputs.detach().cpu(), src_attention_mask.detach().cpu())
+                self.memory[src_text] = (src_encoder_outputs, src_attention_mask)
             # When training encoder, we just return the input tokens
             else:
                 src_encoder_outputs = None
