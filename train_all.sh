@@ -4,7 +4,7 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=4-7
+#SBATCH --array=0-7
 
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
