@@ -1,190 +1,88 @@
-#!/usr/bin/env python3
-"""
-Validates the DrugBank dataset splits according to the splitting rules:
-
-1. Regular mode: All SMILES and FASTA in test/valid appear in train
-2. Cold SMILES mode: SMILES in test/valid don't appear in train, but all FASTA do
-3. Cold FASTA mode: FASTA in test/valid don't appear in train, but all SMILES do
-"""
-
 import os
 
+from transformers import AutoTokenizer, AutoModel
+from tqdm import tqdm
+import torch
+from sklearn.cluster import KMeans
 
-def load_file(filepath):
-    """Load data from a file into a set."""
-    if not os.path.exists(filepath):
-        print(f"ERROR: File not found: {filepath}")
-        return set()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
+model = model.to(device)
+model.eval()
 
-    with open(filepath, 'r') as f:
-        return {line.strip() for line in f if line.strip()}
+with open("data/drugbank/train_enzyme.txt", "r") as f:
+    lines = f.read().splitlines()
+lines = list(set(lines))
+length = []
+embeddings = []
+for line in tqdm(lines):
+    tokens = tokenizer(line, return_tensors="pt", padding=False, truncation=True, max_length=512)
+    tokens = {k: v.to(device) for k, v in tokens.items()}
+    outputs = model(**tokens)
+    length.append(len(tokens['input_ids'][0]))
+    embeddings.append(outputs['last_hidden_state'][0].detach().cpu())
 
+line_to_index = {line: i for i, line in enumerate(lines)}
 
-def validate_regular_split():
-    """
-    Validate regular split:
-    - All SMILES and FASTA in test/valid (both pos and neg) appear in train pos
-    """
-    print("\n=== Testing Regular Split ===")
-    base_dir = "data/drugbank"
+embeddings = torch.cat(embeddings, dim=0)
+print(embeddings.shape)
+with open("data/drugbank/enzyme_embeddings.pt", "wb") as f:
+    torch.save(embeddings, f)
+with open("data/drugbank/enzyme_length.txt", "w") as f:
+    for l in length:
+        f.write(str(l) + "\n")
 
-    # Load training positive samples
-    train_pos_smiles = load_file(f"{base_dir}/train_reaction.txt")
-    train_pos_fasta = load_file(f"{base_dir}/train_enzyme.txt")
+kmeans = KMeans(
+    n_clusters=20,
+    random_state=42
+)
 
-    # Check validation and test sets (both positive and negative)
-    for split in ['valid', 'test']:
-        for dataset_type in ['reaction', 'reaction_neg']:
-            # Check SMILES
-            split_smiles = load_file(f"{base_dir}/{split}_{dataset_type}.txt")
-            missing_smiles = split_smiles - train_pos_smiles
-
-            if missing_smiles:
-                print(
-                    f"❌ Found {len(missing_smiles)} SMILES in {split} {dataset_type} that don't appear in train_reaction.txt")
-                print(f"    First few examples: {list(missing_smiles)[:3]}")
-            else:
-                print(f"✅ All SMILES in {split}_{dataset_type}.txt appear in train_reaction.txt")
-
-        for dataset_type in ['enzyme', 'enzyme_neg']:
-            # Check FASTA
-            split_fasta = load_file(f"{base_dir}/{split}_{dataset_type}.txt")
-            missing_fasta = split_fasta - train_pos_fasta
-
-            if missing_fasta:
-                print(
-                    f"❌ Found {len(missing_fasta)} FASTA in {split} {dataset_type} that don't appear in train_enzyme.txt")
-                print(f"    First few examples: {list(missing_fasta)[:3]}")
-            else:
-                print(f"✅ All FASTA in {split}_{dataset_type}.txt appear in train_enzyme.txt")
+kmeans.fit(embeddings.numpy())
+labels = kmeans.labels_
 
 
-def validate_cold_smiles_split():
-    """
-    Validate cold SMILES split:
-    - SMILES in test/valid don't appear in train
-    - All FASTA in test/valid appear in train
-    """
-    print("\n=== Testing Cold SMILES Split ===")
-    base_dir = "data/drugbank_cs"
-
-    # Load training data
-    train_smiles = load_file(f"{base_dir}/train_reaction.txt")
-    train_fasta = load_file(f"{base_dir}/train_enzyme.txt")
-
-    # Check for cold SMILES
-    for split in ['valid', 'test']:
-        # Check for positive samples
-        split_smiles = load_file(f"{base_dir}/{split}_reaction.txt")
-        common_smiles = split_smiles.intersection(train_smiles)
-
-        if common_smiles:
-            print(f"❌ Found {len(common_smiles)} SMILES in {split}_reaction.txt that also appear in train_reaction.txt")
-            print(f"    First few examples: {list(common_smiles)[:3]}")
-        else:
-            print(f"✅ No SMILES in {split}_reaction.txt appear in train_reaction.txt (correctly cold)")
-
-        # Check for negative samples
-        split_smiles_neg = load_file(f"{base_dir}/{split}_reaction_neg.txt")
-        common_smiles_neg = split_smiles_neg.intersection(train_smiles)
-
-        if common_smiles_neg:
-            print(
-                f"❌ Found {len(common_smiles_neg)} SMILES in {split}_reaction_neg.txt that also appear in train_reaction.txt")
-            print(f"    First few examples: {list(common_smiles_neg)[:3]}")
-        else:
-            print(f"✅ No SMILES in {split}_reaction_neg.txt appear in train_reaction.txt (correctly cold)")
-
-    # Check that all FASTA in test/valid appear in train
-    for split in ['valid', 'test']:
-        for dataset_type in ['enzyme', 'enzyme_neg']:
-            split_fasta = load_file(f"{base_dir}/{split}_{dataset_type}.txt")
-            missing_fasta = split_fasta - train_fasta
-
-            if missing_fasta:
-                print(
-                    f"❌ Found {len(missing_fasta)} FASTA in {split}_{dataset_type}.txt that don't appear in train_enzyme.txt")
-                print(f"    First few examples: {list(missing_fasta)[:3]}")
-            else:
-                print(f"✅ All FASTA in {split}_{dataset_type}.txt appear in train_enzyme.txt (correctly non-cold)")
+def deduplicate(lst):
+    final_list = [lst[0]]
+    for i in range(1, len(lst)):
+        if lst[i] != final_list[-1]:
+            final_list.append(lst[i])
+    return final_list
 
 
-def validate_cold_fasta_split():
-    """
-    Validate cold FASTA split:
-    - FASTA in test/valid don't appear in train
-    - All SMILES in test/valid appear in train
-    """
-    print("\n=== Testing Cold FASTA Split ===")
-    base_dir = "data/drugbank_cf"
+cur_start = 0
+all_new_lines = []
+for l in length:
+    cur_end = cur_start + l
+    curr_labels = labels[cur_start:cur_end]
+    deduped_labels = deduplicate(curr_labels) + 4
+    new_line = tokenizer.decode(deduped_labels)
+    all_new_lines.append(new_line)
+    cur_start = cur_end
+index_to_newline = {i: all_new_lines[i] for i in range(len(all_new_lines))}
 
-    # Load training data
-    train_smiles = load_file(f"{base_dir}/train_reaction.txt")
-    train_fasta = load_file(f"{base_dir}/train_enzyme.txt")
+os.makedirs("data/drugbank20", exist_ok=True)
 
-    # Check for cold FASTA
-    for split in ['valid', 'test']:
-        # Check for positive samples
-        split_fasta = load_file(f"{base_dir}/{split}_enzyme.txt")
-        common_fasta = split_fasta.intersection(train_fasta)
+# copy all the reactions files to the new directory
+import shutil
 
-        if common_fasta:
-            print(f"❌ Found {len(common_fasta)} FASTA in {split}_enzyme.txt that also appear in train_enzyme.txt")
-            print(f"    First few examples: {list(common_fasta)[:3]}")
-        else:
-            print(f"✅ No FASTA in {split}_enzyme.txt appear in train_enzyme.txt (correctly cold)")
+for split in ["train", "valid", "test"]:
+    file_name = f"data/drugbank/{split}_reaction.txt"
+    output_file_name = f"data/drugbank20/{split}_reaction.txt"
+    shutil.copyfile(file_name, output_file_name)
+    file_name = f"data/drugbank/{split}_reaction_neg.txt"
+    output_file_name = f"data/drugbank20/{split}_reaction_neg.txt"
+    shutil.copyfile(file_name, output_file_name)
 
-        # Check for negative samples
-        split_fasta_neg = load_file(f"{base_dir}/{split}_enzyme_neg.txt")
-        common_fasta_neg = split_fasta_neg.intersection(train_fasta)
-
-        if common_fasta_neg:
-            print(
-                f"❌ Found {len(common_fasta_neg)} FASTA in {split}_enzyme_neg.txt that also appear in train_enzyme.txt")
-            print(f"    First few examples: {list(common_fasta_neg)[:3]}")
-        else:
-            print(f"✅ No FASTA in {split}_enzyme_neg.txt appear in train_enzyme.txt (correctly cold)")
-
-    # Check that all SMILES in test/valid appear in train
-    for split in ['valid', 'test']:
-        for dataset_type in ['reaction', 'reaction_neg']:
-            split_smiles = load_file(f"{base_dir}/{split}_{dataset_type}.txt")
-            missing_smiles = split_smiles - train_smiles
-
-            if missing_smiles:
-                print(
-                    f"❌ Found {len(missing_smiles)} SMILES in {split}_{dataset_type}.txt that don't appear in train_reaction.txt")
-                print(f"    First few examples: {list(missing_smiles)[:3]}")
-            else:
-                print(f"✅ All SMILES in {split}_{dataset_type}.txt appear in train_reaction.txt (correctly non-cold)")
-
-
-def count_dataset_samples():
-    """Print sample count statistics for all datasets."""
-    print("\n=== Dataset Sample Counts ===")
-    for name, base_dir in [
-        ("Regular", "data/drugbank"),
-        ("Cold SMILES", "data/drugbank_cs"),
-        ("Cold FASTA", "data/drugbank_cf")
-    ]:
-        print(f"\n{name} Split:")
-        for split in ['train', 'valid', 'test']:
-            pos_smiles = load_file(f"{base_dir}/{split}_reaction.txt")
-            pos_fasta = load_file(f"{base_dir}/{split}_enzyme.txt")
-            neg_smiles = load_file(f"{base_dir}/{split}_reaction_neg.txt")
-            neg_fasta = load_file(f"{base_dir}/{split}_enzyme_neg.txt")
-
-            unique_pos_smiles = len(set(pos_smiles))
-            unique_pos_fasta = len(set(pos_fasta))
-
-            print(f"  {split.capitalize()}: {len(pos_smiles)} positive samples, {len(neg_smiles)} negative samples")
-            print(f"    Unique SMILES: {unique_pos_smiles}, Unique FASTA: {unique_pos_fasta}")
-
-
-if __name__ == "__main__":
-    print("Starting DrugBank split validation...")
-    validate_regular_split()
-    validate_cold_smiles_split()
-    validate_cold_fasta_split()
-    count_dataset_samples()
-    print("\nValidation complete!")
+for split in ["train", "valid", "test"]:
+    for suf in ["", "_neg"]:
+        file_name = f"data/drugbank/{split}_enzyme{suf}.txt"
+        output_file_name = f"data/drugbank20/{split}_enzyme{suf}.txt"
+        with open(file_name, "r") as f:
+            lines = f.read().splitlines()
+        new_lines = []
+        for line in lines:
+            new_lines.append(index_to_newline[line_to_index[line]])
+        with open(output_file_name, "w") as f:
+            for line in new_lines:
+                f.write(line + "\n")

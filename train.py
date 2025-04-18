@@ -20,6 +20,28 @@ num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
 ENCODER_DIM = 256
 
 
+class QuantizeTokenizer:
+    def __init__(self, max_token=20):
+        self.eos_token_id = max_token
+        self.pad_token_id = max_token + 1
+        self.bos_token_id = max_token + 2
+        self.vocab_size = max_token + 3
+
+    def __len__(self):
+        return self.vocab_size
+
+    def get_vocab(self):
+        return {i: i for i in range(self.vocab_size)}
+
+    def __call__(self, seq, **kwargs):
+        seq = torch.IntTensor([int(x) for x in seq.split()]).unsqueeze(0)
+        mask = torch.ones(seq.shape)
+        return {"input_ids": seq, "attention_mask": mask}
+
+    def decode(self, seq):
+        return " ".join([str(x) for x in seq])
+
+
 def get_random_tokens(tokenizer, num_tokens=10):
     """Get random tokens from the tokenizer"""
 
@@ -109,7 +131,7 @@ def load_file(file_path):
     return texts
 
 
-def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0):
+def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0):
     """Load training and testing files"""
     base_dir = f"data/{level}"
     if cold_smiles:
@@ -117,12 +139,20 @@ def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0):
     if cold_fasta:
         base_dir += "_cf"
 
-    src_train = load_file(pjoin(base_dir, "train_reaction.txt"))
-    tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt"))
-    src_valid = load_file(pjoin(base_dir, "valid_reaction.txt"))
-    tgt_valid = load_file(pjoin(base_dir, "valid_enzyme.txt"))
-    src_test = load_file(pjoin(base_dir, "test_reaction.txt"))
-    tgt_test = load_file(pjoin(base_dir, "test_enzyme.txt"))
+    if gen_mol:
+        src_suffix = "_q.txt" if quantize else ".txt"
+        tgt_suffix = ".txt"
+    else:
+        tgt_suffix = "_q.txt" if quantize else ""
+        src_suffix = ".txt"
+
+    src_train = load_file(pjoin(base_dir, "train_reaction.txt".replace(".txt", src_suffix)))
+    src_valid = load_file(pjoin(base_dir, "valid_reaction.txt".replace(".txt", src_suffix)))
+    src_test = load_file(pjoin(base_dir, "test_reaction.txt".replace(".txt", src_suffix)))
+
+    tgt_train = load_file(pjoin(base_dir, "train_enzyme.txt".replace(".txt", tgt_suffix)))
+    tgt_valid = load_file(pjoin(base_dir, "valid_enzyme.txt".replace(".txt", tgt_suffix)))
+    tgt_test = load_file(pjoin(base_dir, "test_enzyme.txt".replace(".txt", tgt_suffix)))
     print(f"src_train: {len(src_train)}, tgt_train: {len(tgt_train)}")
     print(f"src_valid: {len(src_valid)}, tgt_valid: {len(tgt_valid)}")
     print(f"src_test: {len(src_test)}, tgt_test: {len(tgt_test)}")
@@ -397,17 +427,21 @@ if __name__ == "__main__":
     parser.add_argument("--random_tgt", type=int, default=0)
     parser.add_argument("--train_encoder", type=int, default=0,
                         help="Whether to train the encoder (1) or freeze it (0)")
+    parser.add_argument("--quantize", type=int, default=0)
 
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
                                                                                 cold_smiles=args.cold_smiles,
-                                                                                cold_fasta=args.cold_fasta)
+                                                                                cold_fasta=args.cold_fasta,
+                                                                                quantize=args.quantize)
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level == "drugbank",
                                                                            gen_mol=args.gen_mol,
                                                                            train_encoder=args.train_encoder)
+    if args.quantize:
+        tgt_tokenizer = QuantizeTokenizer(max_token=20)
 
     # Create datasets and dataloaders
     random_replace = None
@@ -473,7 +507,7 @@ if __name__ == "__main__":
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                             gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
                                                             cold_fasta=args.cold_fasta, random_replace=random_replace,
-                                                            train_encoder=args.train_encoder)
+                                                            train_encoder=args.train_encoder, quantize=args.quantize)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
@@ -504,6 +538,8 @@ if __name__ == "__main__":
         output_dir += f"_rnd{args.random_tgt}"
     if args.train_encoder:
         output_dir += f"_trainenc"
+    if args.quantize:
+        output_dir += "_quantize"
     if args.level == "drugbank":
         output_dir = output_dir.replace("results", "results_db")
     logs_dir = output_dir.replace("results", "logs")

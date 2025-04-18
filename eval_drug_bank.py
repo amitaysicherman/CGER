@@ -12,15 +12,22 @@ from sklearn.metrics import f1_score
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from sklearn.metrics import roc_auc_score, accuracy_score
 
-def load_negative_files(split, mol,cold_smiles=0, cold_fasta=0, random_replace=None):
+def load_negative_files(split, mol,cold_smiles=0, cold_fasta=0, random_replace=None,quantize=False):
     basd_path = f"data/drugbank"
     if cold_smiles:
         basd_path += f"_cs"
     if cold_fasta:
         basd_path += f"_cf"
-    with open(f"{basd_path}/{split}_reaction_neg.txt", "r") as f:
+    src_file =f"{basd_path}/{split}_reaction_neg.txt"
+    tgt_file = f"{basd_path}/{split}_enzyme_neg.txt"
+    if quantize:
+        if mol:
+            src_file= src_file.replace(".txt", "_q.txt")
+        else:
+            tgt_file= tgt_file.replace(".txt", "_q.txt")
+    with open(src_file, "r") as f:
         src = f.read().splitlines()
-    with open(f"{basd_path}/{split}_enzyme_neg.txt", "r") as f:
+    with open(tgt_file, "r") as f:
         tgt = f.read().splitlines()
     if mol:
         src, tgt = tgt, src
@@ -30,10 +37,11 @@ def load_negative_files(split, mol,cold_smiles=0, cold_fasta=0, random_replace=N
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False,cold_smiles=0, cold_fasta=0,
-             random_replace=None,train_encoder=False):
+             random_replace=None,train_encoder=False,quantize=False):
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol,
                                                                                      cold_smiles=cold_smiles,
-                                                                                     cold_fasta=cold_fasta)
+                                                                                     cold_fasta=cold_fasta,
+                                                                                     quantize=quantize)
     if random_replace is not None:
         tgt_train = [random_replace.get_random_tokens(x) for x in tgt_train]
         tgt_valid = [random_replace.get_random_tokens(x) for x in tgt_valid]
@@ -46,9 +54,9 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
         pos_valid = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
         pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
-    src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace)
+    src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace,quantize=quantize)
 
-    src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace)
+    src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol,cold_smiles=cold_smiles, cold_fasta=cold_fasta,random_replace=random_replace,quantize=quantize)
     if train_encoder:
         neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
         neg_test = SrcTgtDataset(src_neg_test, tgt_neg_test, src_tokenizer, tgt_tokenizer, None, pooling=pooling,train_encoder=True)
