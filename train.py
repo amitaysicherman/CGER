@@ -34,7 +34,7 @@ class QuantizeTokenizer:
         return {i: i for i in range(self.vocab_size)}
 
     def __call__(self, seq, **kwargs):
-        seq = torch.IntTensor([self.bos_token_id] + [int(x) for x in seq.split()] + [self.eos_token_id]).unsqueeze(0)
+        seq = torch.LongTensor([self.bos_token_id] + [int(x) for x in seq.split()] + [self.eos_token_id]).unsqueeze(0)
         mask = torch.ones(seq.shape)
         return {"input_ids": seq, "attention_mask": mask}
 
