@@ -238,10 +238,10 @@ class SrcTgtDataset(TorchDataset):
         else:
             return dict(
                 src_input_ids=src_input_ids,
-                src_attention_mask=src_tokens["attention_mask"].squeeze(0),
-                input_ids=tgt_tokens["input_ids"].squeeze(0),
-                attention_mask=tgt_tokens["attention_mask"].squeeze(0),
-                labels=labels.squeeze(0),
+                src_attention_mask=src_tokens["attention_mask"].squeeze(0).cpu(),
+                input_ids=tgt_tokens["input_ids"].squeeze(0).cpu(),
+                attention_mask=tgt_tokens["attention_mask"].squeeze(0).cpu(),
+                labels=labels.squeeze(0).cpu(),
             )
 
 
