@@ -9,7 +9,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Residual Vector Quantization")
 parser.add_argument("--n_layers", type=int, default=10, help="Number of layers for RVQ")
-parser.add_argument("--n_clusters", type=int, default=10, help="Number of clusters for KMeans")
+parser.add_argument("--n_clusters", type=int, default=15, help="Number of clusters for KMeans")
 parser.add_argument("--random_state", type=int, default=42, help="Random state for KMeans")
 parser.add_argument("--is_molecules", action="store_true", help="Flag to indicate if the input is molecules")
 parser.add_argument("--ds", type=str, default="drugbank", help="Dataset name")
@@ -30,7 +30,7 @@ class ResidualVectorQuantizer:
     def __init__(
             self,
             n_layers: int = 10,
-            n_clusters: int = 20,
+            n_clusters: int = 15,
             kmeans_kwargs: Optional[dict] = None,
             random_state: Optional[int] = 42,
     ):
