@@ -118,7 +118,7 @@ line_to_code = dict()
 for i in range(len(lines)):
     line_to_code[lines[i]] = " ".join([str(x) for x in codes[i].tolist()])
 
-assert len(line_to_code) == len(list(set(line_to_code.values()))), "Duplicate codes found"
+assert len(line_to_code) == len(list(set(line_to_code.values()))), f"Duplicate codes found {len(line_to_code)},{len(set(line_to_code.values()))} times"
 
 
 def convert_files(file_name, line_to_code, output_suffix="_q"):
