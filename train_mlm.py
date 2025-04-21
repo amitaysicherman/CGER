@@ -255,8 +255,8 @@ def main():
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=100,
-        per_device_train_batch_size=128,
-        per_device_eval_batch_size=128,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
         learning_rate=1e-5,
         lr_scheduler_type="constant",
         logging_steps=500,
@@ -269,8 +269,8 @@ def main():
 
     )
 
-    tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
-    model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
+    model = EsmForMaskedLM.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
 
     # model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
     train_dataset = CustomMaskedLMDataset("data/drugbank_mlm")
