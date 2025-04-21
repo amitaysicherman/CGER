@@ -153,7 +153,7 @@ def mask_dict_to_tensor(mask_dict, max_token, max_index):
 
 
 class CustomMaskedLMDataset(Dataset):
-    def __init__(self, base_path, L=10, mask_token=32, is_train=True):
+    def __init__(self, base_path, L=10, mask_token=32):
         self.mask_token = mask_token
         input_file = f"{base_path}/train_input.txt"
         mask_file = f"{base_path}/train_mask.txt"
@@ -161,27 +161,15 @@ class CustomMaskedLMDataset(Dataset):
         self.L = L
         with open(input_file) as f:
             lines = f.read().splitlines()
-        if is_train:
-            lines = lines[:int(0.8 * len(lines))]
-        else:
-            lines = lines[int(0.8 * len(lines)):]
 
         self.input_sequences = [[int(x) for x in line.strip().split()] for line in lines]
         with open(mask_file) as f:
             lines = f.read().splitlines()
-        if is_train:
-            lines = lines[:int(0.8 * len(lines))]
-        else:
-            lines = lines[int(0.8 * len(lines)):]
 
         self.mask_sequences = [[int(x) for x in line.strip().split()] for line in lines]
         self.max_token = max([max(seq) for seq in self.mask_sequences])
         with open(mask_candidate_file) as f:
             lines = f.read().splitlines()
-        if is_train:
-            lines = lines[:int(0.8 * len(lines))]
-        else:
-            lines = lines[int(0.8 * len(lines)):]
         self.masks_dicts = list()
 
         for line in lines:
@@ -284,8 +272,11 @@ def main():
     model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
 
     # model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
-    train_dataset = CustomMaskedLMDataset("data/drugbank_mlm", is_train=True)
-    eval_dataset = CustomMaskedLMDataset("data/drugbank_mlm", is_train=False)
+    train_dataset = CustomMaskedLMDataset("data/drugbank_mlm")
+    #eval is random subset of train
+
+    eval_dataset_indices = np.random.choice(len(train_dataset), 50_000, replace=False)
+    eval_dataset = torch.utils.data.Subset(train_dataset, eval_dataset_indices)
 
     trainer = RestrictedMaskedLMTrainer(
         model=model,
