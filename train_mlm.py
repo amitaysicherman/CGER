@@ -255,9 +255,9 @@ def main():
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=100,
-        per_device_train_batch_size=1024,
-        per_device_eval_batch_size=1024,
-        learning_rate=1e-3,
+        per_device_train_batch_size=128,
+        per_device_eval_batch_size=128,
+        learning_rate=1e-4,
         lr_scheduler_type="constant",
         logging_steps=500,
         save_steps=1000,
