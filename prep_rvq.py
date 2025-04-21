@@ -56,9 +56,11 @@ class ResidualVectorQuantizer:
             centroids = kmeans.cluster_centers_[kmeans.predict(residual)]
             labels.append(kmeans.labels_)
             residual = residual - centroids
-            labels_str = []
+            labels_str = ["" for _ in range(len(labels[0]))]
             for i in range(len(labels)):
-                labels_str.append("".join([str(x) for x in labels[i].tolist()]))
+                for j in range(len(labels[i])):
+                    labels_str[j] += str(labels[i][j]) + ":"
+
             if len(set(labels_str)) == len(labels_str):
                 to_stop = True
             else:
