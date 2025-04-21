@@ -69,11 +69,13 @@ class ResidualVectorQuantizer:
                     # add random noise:
                     print(f"Layer {len(self.quantizers_)}: Adding random noise to residual")
                     residual += np.random.normal(0, np.mean(residual) / 3, residual.shape)
-
+            else:
+                not_improve_step = 0
+                n_unique_codes = len(set(labels_str))
+                print(f"Layer {len(self.quantizers_)}: {n_unique_codes}/{len(labels_str)} unique codes found")
             if len(set(labels_str)) == len(labels_str):
                 to_stop = True
-            else:
-                print(f"Layer {len(self.quantizers_)}: {len(set(labels_str))}/{len(labels_str)} unique codes found")
+
 
         self.is_fitted_ = True
         return self
