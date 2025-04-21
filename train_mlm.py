@@ -54,11 +54,9 @@ class CustomMaskedLMDataset(Dataset):
         self.L = L
         with open(input_file) as f:
             lines = f.read().splitlines()
-
         self.input_sequences = [[int(x) for x in line.strip().split()] for line in lines]
         with open(mask_file) as f:
             lines = f.read().splitlines()
-
         self.mask_sequences = [[int(x) for x in line.strip().split()] for line in lines]
         self.max_token = max([max(seq) for seq in self.mask_sequences])
         with open(mask_candidate_file) as f:
@@ -128,10 +126,10 @@ class RestrictedMaskedLMTrainer(Trainer):
         input_ids = inputs.get("input_ids")
         labels = inputs.get("labels")
         possible_tokens = inputs.get("possible_tokens", None)
-
         # Forward pass
         outputs = model(input_ids=input_ids)
         outputs.logits += possible_tokens
+
         loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)
         masked_lm_loss = loss_fct(outputs.logits.view(-1, outputs.logits.size(-1)), labels.view(-1))
 
@@ -184,9 +182,11 @@ def main():
 
     # model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
     train_dataset = CustomMaskedLMDataset("data/drugbank_mlm")
-    # eval is random subset of train
 
-    eval_dataset_indices = np.random.choice(len(train_dataset), 50_000, replace=False)
+    # eval is random subset of train
+    k = min(len(train_dataset), 50_000)
+
+    eval_dataset_indices = np.random.choice(len(train_dataset), k, replace=False)
     eval_dataset = torch.utils.data.Subset(train_dataset, eval_dataset_indices)
 
     trainer = RestrictedMaskedLMTrainer(
