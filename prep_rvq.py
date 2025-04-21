@@ -44,6 +44,8 @@ class ResidualVectorQuantizer:
 
         residual = X.copy()
         to_stop = False
+        n_unique_codes = 0
+        not_improve_step = 0
         while not to_stop:
             self.n_layers += 1
             kmeans = KMeans(
@@ -60,6 +62,11 @@ class ResidualVectorQuantizer:
             for i in range(len(labels)):
                 for j in range(len(labels[i])):
                     labels_str[j] += str(labels[i][j]) + ":"
+            if len(set(labels_str)) == n_unique_codes:
+                not_improve_step += 1
+                if not_improve_step > 5:
+                    # add random noise:
+                    residual += np.random.normal(0, np.mean(residual) / 3, residual.shape)
 
             if len(set(labels_str)) == len(labels_str):
                 to_stop = True

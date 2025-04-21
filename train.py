@@ -13,11 +13,95 @@ from transformers import AutoModel
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.backends.mps.is_available():
+    device = torch.device("mps")
 
 hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
 num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
 num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
 ENCODER_DIM = 256
+
+import csv
+import os
+from transformers import TrainerCallback
+
+
+class EvalLoggingCallback(TrainerCallback):
+    """
+    Callback to log evaluation metrics to a CSV file during training.
+    """
+
+    def __init__(self, output_dir, filename="eval_logs.csv"):
+        """
+        Initialize the callback.
+
+        Args:
+            output_dir: Directory where the CSV file will be saved
+            filename: Name of the CSV file
+        """
+        self.output_dir = output_dir
+        self.csv_path = os.path.join(output_dir, filename)
+        self.headers = None
+        self.csv_file = None
+        self.writer = None
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        """
+        Called after evaluation. Logs metrics to CSV file.
+        """
+        if metrics is None:
+            return
+
+        # Get current step
+        step = state.global_step
+
+        # Add step to metrics
+        metrics['step'] = step
+
+        # Check if directory exists, create if not
+        os.makedirs(self.output_dir, exist_ok=True)
+
+        # If file doesn't exist, create and write headers
+        if not os.path.exists(self.csv_path):
+            # Create CSV file with headers
+            with open(self.csv_path, 'w', newline='') as f:
+                # Get all keys from metrics as headers
+                self.headers = sorted(metrics.keys())
+                writer = csv.DictWriter(f, fieldnames=self.headers)
+                writer.writeheader()
+                writer.writerow(metrics)
+        else:
+            # Append to existing file
+            with open(self.csv_path, 'a', newline='') as f:
+                # Read existing headers if needed
+                if self.headers is None:
+                    with open(self.csv_path, 'r', newline='') as read_f:
+                        reader = csv.reader(read_f)
+                        self.headers = next(reader)  # Get headers from first row
+
+                # Check if we have new metrics that weren't in original headers
+                new_headers = [h for h in metrics.keys() if h not in self.headers]
+
+                if new_headers:  # If we have new headers, we need to rewrite the file
+                    self.headers.extend(new_headers)
+                    # Read existing data
+                    with open(self.csv_path, 'r', newline='') as read_f:
+                        reader = csv.DictReader(read_f)
+                        existing_data = list(reader)
+
+                    # Write all data with updated headers
+                    with open(self.csv_path, 'w', newline='') as write_f:
+                        writer = csv.DictWriter(write_f, fieldnames=self.headers)
+                        writer.writeheader()
+                        for row in existing_data:
+                            writer.writerow(row)
+                        writer.writerow(metrics)
+                else:
+                    # Just append to existing file with consistent headers
+                    writer = csv.DictWriter(f, fieldnames=self.headers)
+                    writer.writerow(metrics)
+
+        print(f"Evaluation metrics at step {step} logged to {self.csv_path}")
 
 
 class QuantizeTokenizer:
@@ -579,6 +663,9 @@ if __name__ == "__main__":
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics_func
     )
+    eval_logging_callback = EvalLoggingCallback(output_dir=output_dir)
+    trainer.add_callback(eval_logging_callback)
+
     print(trainer.evaluate(eval_dataset["valid"]))
     # Train model
     print("Training model...")
