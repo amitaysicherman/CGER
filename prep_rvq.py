@@ -72,7 +72,7 @@ class ResidualVectorQuantizer:
                     residual += np.random.normal(0, std, residual.shape)
             else:
                 not_improve_step = 0
-                n_unique_codes = len(set(labels_str))/3
+                n_unique_codes = len(set(labels_str))
                 print(f"Layer {len(self.quantizers_)}: {n_unique_codes}/{len(labels_str)} unique codes found")
             if len(set(labels_str)) == len(labels_str):
                 to_stop = True
