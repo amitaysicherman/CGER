@@ -524,7 +524,7 @@ if __name__ == "__main__":
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)
-        eval_dataset = {"test": test_dataset, "train": train_small_dataset}
+        eval_dataset = {"test": test_dataset, "train": train_small_dataset, "valid": valid_dataset}
         metric_for_best_model = "eval_test_token_accuracy"
 
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
