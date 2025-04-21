@@ -38,7 +38,7 @@ class ResidualVectorQuantizer:
         self.n_layers = 0
         self.is_fitted_ = False
 
-    def fit(self, X):
+    def fit_transform(self, X):
         self.quantizers_ = []
         labels = []
 
@@ -68,7 +68,7 @@ class ResidualVectorQuantizer:
                 if not_improve_step > 5:
                     # add random noise:
                     print(f"Layer {len(self.quantizers_)}: Adding random noise to residual")
-                    std=np.std(residual)/3
+                    std = np.std(residual) / 3
                     residual += np.random.normal(0, std, residual.shape)
             else:
                 not_improve_step = 0
@@ -77,20 +77,11 @@ class ResidualVectorQuantizer:
             if len(set(labels_str)) == len(labels_str):
                 to_stop = True
 
-
+        codes = np.zeros((X.shape[0], self.n_layers), dtype=int)
+        for i in range(len(labels)):
+            for j in range(len(labels[i])):
+                codes[j][i] = labels[i][j]
         self.is_fitted_ = True
-        return self
-
-    def transform(self, X):
-        if not self.is_fitted_:
-            raise ValueError("RVQ must be fitted before transform can be called")
-        n_samples = X.shape[0]
-        codes = np.zeros((n_samples, self.n_layers), dtype=int)
-        residual = X.copy()
-        for i, kmeans in enumerate(self.quantizers_):
-            codes[:, i] = kmeans.predict(residual)
-            centroids = kmeans.cluster_centers_[codes[:, i]]
-            residual = residual - centroids
         return codes
 
 
@@ -134,8 +125,7 @@ rvq = ResidualVectorQuantizer(
     n_clusters=args.n_clusters,
     random_state=args.random_state
 )
-rvq.fit(embeddings)
-codes = rvq.transform(embeddings)
+codes = rvq.fit_transform(embeddings)
 line_to_code = dict()
 for i in range(len(lines)):
     line_to_code[lines[i]] = " ".join([str(x) for x in codes[i].tolist()])
