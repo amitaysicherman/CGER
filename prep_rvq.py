@@ -8,7 +8,6 @@ from typing import List, Tuple, Optional
 import argparse
 
 parser = argparse.ArgumentParser(description="Residual Vector Quantization")
-parser.add_argument("--n_layers", type=int, default=10, help="Number of layers for RVQ")
 parser.add_argument("--n_clusters", type=int, default=15, help="Number of clusters for KMeans")
 parser.add_argument("--random_state", type=int, default=42, help="Random state for KMeans")
 parser.add_argument("--is_molecules", action="store_true", help="Flag to indicate if the input is molecules")
@@ -18,7 +17,6 @@ ds = args.ds
 # class Args:
 #     def __init__(self, n_layers=10, n_clusters=10, random_state=42, is_molecules=False):
 #
-#         self.n_layers = n_layers
 #         self.n_clusters = n_clusters
 #         self.random_state = random_state
 #         self.is_molecules = is_molecules
@@ -29,12 +27,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class ResidualVectorQuantizer:
     def __init__(
             self,
-            n_layers: int = 10,
             n_clusters: int = 15,
             kmeans_kwargs: Optional[dict] = None,
             random_state: Optional[int] = 42,
     ):
-        self.n_layers = n_layers
         self.n_clusters = n_clusters
         self.kmeans_kwargs = kmeans_kwargs or {}
         self.random_state = random_state
@@ -43,8 +39,11 @@ class ResidualVectorQuantizer:
 
     def fit(self, X):
         self.quantizers_ = []
+        labels = []
+
         residual = X.copy()
-        for i in range(self.n_layers):
+        to_stop = False
+        while not to_stop:
             kmeans = KMeans(
                 n_clusters=self.n_clusters,
                 random_state=self.random_state,
@@ -53,7 +52,15 @@ class ResidualVectorQuantizer:
             kmeans.fit(residual)
             self.quantizers_.append(kmeans)
             centroids = kmeans.cluster_centers_[kmeans.predict(residual)]
+            labels.append(kmeans.labels_)
             residual = residual - centroids
+            labels_str = []
+            for i in range(len(labels)):
+                labels_str.append("".join([str(x) for x in labels[i].tolist()]))
+            if len(set(labels_str)) == len(labels_str):
+                to_stop = True
+            else:
+                print(f"Layer {len(self.quantizers_)}: {len(set(labels_str))}/{len(labels_str)} unique codes found")
 
         self.is_fitted_ = True
         return self
@@ -108,7 +115,6 @@ for line in tqdm(lines):
 embeddings = np.stack(embeddings)
 
 rvq = ResidualVectorQuantizer(
-    n_layers=args.n_layers,
     n_clusters=args.n_clusters,
     random_state=args.random_state
 )
@@ -118,7 +124,8 @@ line_to_code = dict()
 for i in range(len(lines)):
     line_to_code[lines[i]] = " ".join([str(x) for x in codes[i].tolist()])
 
-assert len(line_to_code) == len(list(set(line_to_code.values()))), f"Duplicate codes found {len(line_to_code)},{len(set(line_to_code.values()))} times"
+assert len(line_to_code) == len(list(
+    set(line_to_code.values()))), f"Duplicate codes found {len(line_to_code)},{len(set(line_to_code.values()))} times"
 
 
 def convert_files(file_name, line_to_code, output_suffix="_q"):
