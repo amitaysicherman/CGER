@@ -13,8 +13,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 from sklearn.metrics import roc_auc_score, accuracy_score
 
 
-def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=None, quantize=False):
-    basd_path = f"data/drugbank"
+def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=None, quantize=False, level="drugbank"):
+    basd_path = f"data/{level}"
     if cold_smiles:
         basd_path += f"_cs"
     if cold_fasta:
@@ -38,8 +38,8 @@ def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False, cold_smiles=0, cold_fasta=0,
-             random_replace=None, train_encoder=False, quantize=False):
-    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level="drugbank", gen_mol=gen_mol,
+             random_replace=None, train_encoder=False, quantize=False,level="drugbank"):
+    src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=level, gen_mol=gen_mol,
                                                                                 cold_smiles=cold_smiles,
                                                                                 cold_fasta=cold_fasta,
                                                                                 quantize=quantize)
@@ -58,10 +58,10 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
         pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
     src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol, cold_smiles=cold_smiles, cold_fasta=cold_fasta,
-                                                       random_replace=random_replace, quantize=quantize)
+                                                       random_replace=random_replace, quantize=quantize,level=level)
 
     src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol, cold_smiles=cold_smiles, cold_fasta=cold_fasta,
-                                                     random_replace=random_replace, quantize=quantize)
+                                                     random_replace=random_replace, quantize=quantize,level=level)
     if train_encoder:
         neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, None, pooling=pooling,
                                   train_encoder=True)
@@ -193,13 +193,13 @@ class Config:
                 self.cold_fasta, self.quantize]
 
 
-def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=False):
+def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=False, level="drugbank"):
     encoder_dim = 768 if not mol else 1280
     model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Number of parameters in the model: {n_params:,}")
 
-    output_dir = f"drugbank_{size}_{dropout}_{learning_rate}"
+    output_dir = f"{level}_{size}_{dropout}_{learning_rate}"
     if bottleneck_dim > 0:
         output_dir += f"_bottleneck_{bottleneck_dim}"
     if pooling:
@@ -219,7 +219,7 @@ def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_ra
 def main():
     cong1 = Config("l", 0.0, True, 128, 0.0001, True, 0, 0, quantize=True)
     cong2 = Config("l", 0.0, True, 128, 0.0001, False, 0, 0, quantize=True)
-
+    LEVEL = "drugbank"
     all_scores = []
     all_true = []
 
@@ -237,7 +237,7 @@ def main():
                                                                         gen_mol=mol,
                                                                         return_files=True,
                                                                         cold_smiles=cold_smiles,
-                                                                        cold_fasta=cold_fasta, quantize=quantize)
+                                                                        cold_fasta=cold_fasta, quantize=quantize,level=LEVEL)
 
         if quantize:
             from train import QuantizeTokenizer
@@ -246,7 +246,7 @@ def main():
         trie = build_trie(list(set(trie_files)), esm_tokenizer, max_length=512)
         reaction_model.to(device).eval()
         decoder.to(device).eval()
-        model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=quantize)
+        model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=quantize, level=LEVEL)
 
         y_true, y_scores = evaluate_model(pos_test, neg_test, model, batch_size=32, return_prob=True)
         all_scores.append(y_scores)

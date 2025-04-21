@@ -12,8 +12,9 @@ parser.add_argument("--n_layers", type=int, default=10, help="Number of layers f
 parser.add_argument("--n_clusters", type=int, default=10, help="Number of clusters for KMeans")
 parser.add_argument("--random_state", type=int, default=42, help="Random state for KMeans")
 parser.add_argument("--is_molecules", action="store_true", help="Flag to indicate if the input is molecules")
+parser.add_argument("--ds", type=str, default="drugbank", help="Dataset name")
 args = parser.parse_args()
-
+ds = args.ds
 # class Args:
 #     def __init__(self, n_layers=10, n_clusters=10, random_state=42, is_molecules=False):
 #
@@ -83,19 +84,19 @@ def get_model_tokenizer(is_molecules: bool):
     return tokenizer, model
 
 
-def get_lines(is_molecules: bool):
+def get_lines(is_molecules: bool, ds: str):
     if is_molecules:
-        with open("data/drugbank/train_reaction.txt", "r") as f:
+        with open(f"data/{ds}/train_reaction.txt", "r") as f:
             lines = f.read().splitlines()
     else:
-        with open("data/drugbank/train_enzyme.txt", "r") as f:
+        with open(f"data/{ds}/train_enzyme.txt", "r") as f:
             lines = f.read().splitlines()
     return lines
 
 
 tokenizer, model = get_model_tokenizer(args.is_molecules)
 model = model.to(device)
-lines = get_lines(args.is_molecules)
+lines = get_lines(args.is_molecules, ds)
 
 lines = list(set(lines))
 embeddings = []
@@ -127,13 +128,13 @@ def convert_files(file_name, line_to_code, output_suffix="_q"):
             f.write(code + "\n")
 
 
-def get_all_file_names(is_molecules: bool):
+def get_all_file_names(is_molecules: bool, ds: str):
     if is_molecules:
         type_name = "reaction"
-        base_dirs = ["data/drugbank", "data/drugbank_cf"]
+        base_dirs = [f"data/{ds}", f"data/{ds}_cf"]
     else:
         type_name = "enzyme"
-        base_dirs = ["data/drugbank", "data/drugbank_cs"]
+        base_dirs = [f"data/{ds}", f"data/{ds}_cs"]
     file_names = []
     for base_path in base_dirs:
         for split in ["train", "valid", "test"]:
@@ -142,7 +143,6 @@ def get_all_file_names(is_molecules: bool):
     return file_names
 
 
-
-file_names = get_all_file_names(args.is_molecules)
+file_names = get_all_file_names(args.is_molecules, ds)
 for file_name in file_names:
     convert_files(file_name, line_to_code)

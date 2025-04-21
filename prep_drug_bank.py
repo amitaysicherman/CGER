@@ -118,6 +118,7 @@ if __name__ == "__main__":
 
     lines = get_lines(ds_to_files(ds))
     output_base = get_out_base(cold_smiles, cold_fasta, ds)
+    os.makedirs(output_base, exist_ok=True)
     random.shuffle(lines)
     samples = [Sample(line) for line in lines]
     neg_samples = [sample for sample in samples if sample.is_neg()]

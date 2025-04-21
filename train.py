@@ -160,7 +160,7 @@ def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0)
     print(f"src_valid: {len(src_valid)}, tgt_valid: {len(tgt_valid)}")
     print(f"src_test: {len(src_test)}, tgt_test: {len(tgt_test)}")
     if gen_mol:
-        assert level == "drugbank"
+        assert level != "easy", "gen_mol can only be used with drugbank"
         src_train, tgt_train = tgt_train, src_train
         src_valid, tgt_valid = tgt_valid, src_valid
         src_test, tgt_test = tgt_test, src_test
@@ -442,7 +442,7 @@ if __name__ == "__main__":
                                                                                 quantize=args.quantize)
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
-                                                                           drugbank=args.level == "drugbank",
+                                                                           drugbank=args.level != "easy",
                                                                            gen_mol=args.gen_mol,
                                                                            train_encoder=args.train_encoder)
     if args.quantize:
@@ -483,7 +483,7 @@ if __name__ == "__main__":
     else:
         trie = None
     encoder_dim = ENCODER_DIM
-    if args.level == "drugbank":
+    if args.level != "easy":
         encoder_dim = 768
     if args.gen_mol:
         encoder_dim = 1280
@@ -506,13 +506,14 @@ if __name__ == "__main__":
             bottleneck_dim=args.bottleneck_dim
         )
 
-    if args.level == "drugbank":
+    if args.level == "easy":
         from eval_drug_bank import evaluate_model, get_data
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
                                                             gen_mol=args.gen_mol, cold_smiles=args.cold_smiles,
                                                             cold_fasta=args.cold_fasta, random_replace=random_replace,
-                                                            train_encoder=args.train_encoder, quantize=args.quantize)
+                                                            train_encoder=args.train_encoder, quantize=args.quantize,
+                                                            level=args.level)
 
         compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
 
@@ -545,8 +546,7 @@ if __name__ == "__main__":
         output_dir += f"_trainenc"
     if args.quantize:
         output_dir += "_quantize"
-    if args.level == "drugbank":
-        output_dir = output_dir.replace("results", "results_db")
+    output_dir= output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -584,5 +584,4 @@ if __name__ == "__main__":
     print("Training model...")
 
     trainer.train(resume_from_checkpoint=len(glob.glob(pjoin(output_dir, "checkpoint-*"))) > 0)
-
     print("Training complete!")
