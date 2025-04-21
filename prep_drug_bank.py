@@ -105,7 +105,7 @@ def ds_to_files(ds):
     elif ds == "davis":
         return "data/davis/Davis.txt"
     elif ds == "biosnap":
-        return "data/BIOSNAP/BIOSNAP.txt"
+        return "data/biosnap/BIOSNAP.txt"
     elif ds == "kiba":
         return "data/kiba/KIBA.txt"
     elif ds == "bindingdb":
