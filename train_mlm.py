@@ -10,128 +10,21 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
+
 )
+from transformers import AutoTokenizer, BertForMaskedLM, BertConfig
+
 from torch.utils.data import Dataset
 
-# Setup logging
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
+size = "m"
+dropout = 0.0
 
-
-class MaskedSequenceSearch:
-    def __init__(self, tokenizer, max_length=10, mask=32):
-        """
-        Initialize the search structure with a corpus of sequences
-
-        Args:
-            sequences: List of sequences (strings)
-            max_length: Maximum length of sequences
-        """
-        self.max_length = max_length
-        self.mask = mask
-        # Inverted index: position -> character -> set of sequence indices
-        with open("data/drugbank/train_enzyme.txt") as f:
-            lines = f.read().splitlines()
-        seqs = [line.strip() for line in lines]
-        seqs = list(set(seqs))
-        corpus = []
-        for seq in tqdm(seqs):
-            if len(seq) < max_length:
-                continue
-            for index in range(len(seq) - max_length):
-                seq_token = tokenizer.encode(seq[index:index + max_length], add_special_tokens=False)
-                corpus.append(seq_token)
-        self.sequences = corpus
-
-        self.inverted_index = self._build_inverted_index()
-
-    def _build_inverted_index(self):
-        """Build the inverted index from the sequence corpus"""
-        inverted_index = [{} for _ in range(self.max_length)]
-
-        for seq_idx, sequence in enumerate(self.sequences):
-            for pos, char in enumerate(sequence):
-                if char not in inverted_index[pos]:
-                    inverted_index[pos][char] = set()
-                inverted_index[pos][char].add(seq_idx)
-
-        return inverted_index
-
-    def search(self, masked_sequence):
-        """
-        Search for all sequences that match the masked pattern
-
-        Args:
-            masked_sequence: A string with some characters and masks
-                             (where masks are represented by '*')
-
-        Returns:
-            List of matching sequences
-        """
-        # Start with all sequences as candidates
-        candidate_indices = set(range(len(self.sequences)))
-
-        # Filter candidates by length
-        candidate_indices = {i for i in candidate_indices
-                             if len(self.sequences[i]) == len(masked_sequence)}
-
-        # For each non-masked position, filter candidates
-        for pos, char in enumerate(masked_sequence):
-            if pos >= self.max_length:
-                break
-
-            if char != self.mask:  # Not a mask
-                # Get sequences that have this character at this position
-                if char in self.inverted_index[pos]:
-                    candidate_indices &= self.inverted_index[pos][char]
-                else:
-                    # No sequences have this character at this position
-                    return []
-
-        # Return the matching sequences
-        return [self.sequences[i] for i in candidate_indices]
-
-    def get_mask_candidates(self, masked_sequence):
-        candidates = defaultdict(list)
-        sequences_candidates = self.search(masked_sequence)
-
-        for pos, char in enumerate(masked_sequence):
-            if char != self.mask:
-                continue
-            for seq in sequences_candidates:
-                candidates[pos].append(seq[pos])
-        # Remove duplicates
-        for pos in candidates:
-            candidates[pos] = list(set(candidates[pos]))
-        return candidates
-
-    def add_n_masks(self, seq_str, n_can_max=3):
-        # add masks to the sequence until the number of returned sequences is less than n_seq_max
-        seq = seq_str[:]
-        seq_len = len(seq)
-        mask_positions = random.sample(range(seq_len), len(seq))
-        seq_mask = self.get_mask_candidates(seq)
-        for pos in mask_positions:
-            seq[pos] = self.mask
-            seq_mask = self.get_mask_candidates(seq)
-            n_can_mean = np.mean([len(seq_mask[i]) for i in seq_mask if len(seq_mask[i]) > 0])
-            if n_can_mean > n_can_max:
-                seq[pos] = seq_str[pos]
-                return seq, seq_mask
-        return seq, seq_mask
-
-    def add_masks(self, seq_str, n):
-        seq = seq_str[:]
-        seq_len = len(seq)
-        mask_positions = random.sample(range(seq_len), n)
-        for pos in mask_positions:
-            seq[pos] = self.mask
-        seq_mask = self.get_mask_candidates(seq)
-        return seq, seq_mask
+hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
+num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
+num_attention_heads_per_size = {"xs": 2, "s": 4, "m": 4, "l": 8, "xl": 16}
+hidden_size = hidden_size_per_size[size]
+num_hidden_layers = num_layers_per_size[size]
+num_attention_heads = num_attention_heads_per_size[size]
 
 
 def mask_dict_to_tensor(mask_dict, max_token, max_index):
@@ -270,11 +163,28 @@ def main():
     )
 
     tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
-    model = EsmForMaskedLM.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
+    config = BertConfig(
+        vocab_size=len(tokenizer.get_vocab()),
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        decoder_start_token_id=tokenizer.pad_token_id,
+        is_encoder_decoder=False,
+        is_decoder=False,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=num_attention_heads,
+        intermediate_size=hidden_size * 4,
+        hidden_dropout_prob=dropout,
+        attention_probs_dropout_prob=dropout,
+        max_position_embeddings=512,
+    )
+    model = BertForMaskedLM(config)
+    # model = EsmForMaskedLM.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
 
     # model = EsmForMaskedLM.from_pretrained("facebook/esm2_t6_8M_UR50D", trust_remote_code=True)
     train_dataset = CustomMaskedLMDataset("data/drugbank_mlm")
-    #eval is random subset of train
+    # eval is random subset of train
 
     eval_dataset_indices = np.random.choice(len(train_dataset), 50_000, replace=False)
     eval_dataset = torch.utils.data.Subset(train_dataset, eval_dataset_indices)
@@ -293,7 +203,6 @@ def main():
     print(trainer.evaluate())
     print("Training...")
     trainer.train()
-    logger.info("Fine-tuning complete!")
 
 
 if __name__ == "__main__":
