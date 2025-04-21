@@ -416,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval_steps", type=int, default=250)
     parser.add_argument("--save_steps", type=int, default=250)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--steps", type=int, default=25000)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--report_to", type=str, default="tensorboard")
@@ -546,7 +546,7 @@ if __name__ == "__main__":
         output_dir += f"_trainenc"
     if args.quantize:
         output_dir += "_quantize"
-    output_dir= output_dir.replace("results", f"results_{args.level}")
+    output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
         output_dir=output_dir,
@@ -557,7 +557,7 @@ if __name__ == "__main__":
         per_device_eval_batch_size=args.batch_size,
         eval_accumulation_steps=30,
         save_total_limit=3,
-        num_train_epochs=args.epochs,
+        max_steps=args.steps,
         fp16=args.fp16,
         logging_steps=args.log_steps,
         eval_steps=args.eval_steps,
