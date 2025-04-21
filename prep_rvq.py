@@ -64,8 +64,10 @@ class ResidualVectorQuantizer:
                     labels_str[j] += str(labels[i][j]) + ":"
             if len(set(labels_str)) == n_unique_codes:
                 not_improve_step += 1
+                print(f"Layer {len(self.quantizers_)}: No improvement in unique codes")
                 if not_improve_step > 5:
                     # add random noise:
+                    print(f"Layer {len(self.quantizers_)}: Adding random noise to residual")
                     residual += np.random.normal(0, np.mean(residual) / 3, residual.shape)
 
             if len(set(labels_str)) == len(labels_str):
