@@ -185,7 +185,6 @@ class CustomMaskedLMDataset(Dataset):
         self.masks_dicts = list()
 
         for line in lines:
-            print(line)
             mask_dict = dict()
             for index_can in line.strip().split(" "):
                 index, candidates = index_can.split(":")
@@ -268,12 +267,12 @@ def main():
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=100,
-        per_device_train_batch_size=128,
-        per_device_eval_batch_size=128,
+        per_device_train_batch_size=1024,
+        per_device_eval_batch_size=1024,
         learning_rate=1e-4,
-        logging_steps=100,
-        save_steps=200,
-        eval_steps=200,
+        logging_steps=500,
+        save_steps=1000,
+        eval_steps=1000,
         evaluation_strategy="steps",
         remove_unused_columns=False,
         save_total_limit=2,
