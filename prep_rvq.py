@@ -35,6 +35,7 @@ class ResidualVectorQuantizer:
         self.kmeans_kwargs = kmeans_kwargs or {}
         self.random_state = random_state
         self.quantizers_ = []
+        self.n_layers = 0
         self.is_fitted_ = False
 
     def fit(self, X):
@@ -44,6 +45,7 @@ class ResidualVectorQuantizer:
         residual = X.copy()
         to_stop = False
         while not to_stop:
+            self.n_layers += 1
             kmeans = KMeans(
                 n_clusters=self.n_clusters,
                 random_state=self.random_state,
