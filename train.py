@@ -506,7 +506,7 @@ if __name__ == "__main__":
             bottleneck_dim=args.bottleneck_dim
         )
 
-    if args.level == "easy":
+    if args.level != "easy":
         from eval_drug_bank import evaluate_model, get_data
 
         pos_valid, neg_valid, pos_test, neg_test = get_data(args.pooling, src_model, src_tokenizer, tgt_tokenizer,
