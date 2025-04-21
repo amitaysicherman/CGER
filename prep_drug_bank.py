@@ -15,7 +15,7 @@ test_size = 0.1
 class Sample:
     def __init__(self, line):
         _, __, smiles, fasta, label = line.split(" ")
-        self.label = int(label)
+        self.label = int(float(label))
         smiles = remove_stereo_mol(smiles)
         self.smiles = smiles
         self.fasta = fasta
@@ -32,9 +32,12 @@ random.seed(42)
 parser = argparse.ArgumentParser(description="Prepare DrugBank dataset")
 parser.add_argument("--cold_smiles", type=int, default=0)
 parser.add_argument("--cold_fasta", type=int, default=0)
+parser.add_argument("--ds", type=str, default="drugbank")
+
 args = parser.parse_args()
 cold_smiles = args.cold_smiles
 cold_fasta = args.cold_fasta
+ds = args.ds
 if cold_fasta > 0 and cold_smiles > 0:
     raise ValueError(
         "You cannot set both cold_smiles and cold_fasta to a value greater than 0. Please set one of them to 0.")
@@ -54,8 +57,8 @@ def get_lines(file):
     return lines
 
 
-def get_out_base(cold_smiles, cold_fasta):
-    out_base = "data/drugbank"
+def get_out_base(cold_smiles, cold_fasta, ds):
+    out_base = f"data/{ds}"
     if cold_smiles:
         out_base += "_cs"
     if cold_fasta:
@@ -96,9 +99,25 @@ def split_val_test(test_val_samples, valid_size, test_size):
     return valid_samples, test_samples
 
 
+def ds_to_files(ds):
+    if ds == "drugbank":
+        return "data/drugbank/DrugBank.txt"
+    elif ds == "davis":
+        return "data/davis/Davis.txt"
+    elif ds == "biosnap":
+        return "data/BIOSNAP/BIOSNAP.txt"
+    elif ds == "kiba":
+        return "data/kiba/KIBA.txt"
+    elif ds == "bindingdb":
+        return "data/bindingdb/BindingDB.txt"
+    else:
+        raise ValueError("Unknown dataset")
+
+
 if __name__ == "__main__":
-    lines = get_lines("data/drugbank/DrugBank.txt")
-    output_base = get_out_base(cold_smiles, cold_fasta)
+
+    lines = get_lines(ds_to_files(ds))
+    output_base = get_out_base(cold_smiles, cold_fasta, ds)
     random.shuffle(lines)
     samples = [Sample(line) for line in lines]
     neg_samples = [sample for sample in samples if sample.is_neg()]
