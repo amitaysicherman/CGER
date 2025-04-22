@@ -122,9 +122,9 @@ def remove_not_in_train_labels():
 
 if __name__ == "__main__":
     # prep_go()
-    prep_protein("train")
-    prep_protein("test")
-    prep_protein("valid")
+    # prep_protein("train")
+    # prep_protein("test")
+    # prep_protein("valid")
     with open("data/mf/go_info.txt", "r") as f:
         go_terms = f.read().splitlines()
 
