@@ -155,8 +155,14 @@ class RamdomReplace:
         return random_text
 
 
-def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False):
-    if gen_mol:
+def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False,
+                        is_text=False):
+    if is_text:
+        src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+        src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
+        tgt_tokenizer = AutoTokenizer.from_pretrained(
+            "facebook/esm2_t33_650M_UR50D")  # will replace with the quantized tokenizer
+    elif gen_mol:
         assert drugbank, "gen_mol can only be used with drugbank"
         src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
@@ -528,7 +534,8 @@ if __name__ == "__main__":
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level != "easy",
                                                                            gen_mol=args.gen_mol,
-                                                                           train_encoder=args.train_encoder)
+                                                                           train_encoder=args.train_encoder,
+                                                                           is_text=args.level == "mf")
     if args.quantize:
         tgt_tokenizer = QuantizeTokenizer()
 
@@ -567,6 +574,8 @@ if __name__ == "__main__":
     else:
         trie = None
     encoder_dim = ENCODER_DIM
+    if args.level == "mf":
+        encoder_dim = 768
     if args.level != "easy":
         encoder_dim = 768
     if args.gen_mol:

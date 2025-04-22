@@ -165,4 +165,8 @@ def get_all_file_names(is_molecules: bool, ds: str):
 
 file_names = get_all_file_names(args.is_molecules, ds)
 for file_name in file_names:
+    if is_text and "cf" in file_name:
+        continue
+    if is_text and "cs" in file_name:
+        continue
     convert_files(file_name, line_to_code)
