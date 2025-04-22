@@ -60,7 +60,7 @@ def prep_pairs(split, go_terms):
         line = [int(float(x)) for x in line]
         labels.append(line)
     assert len(labels) == len(proteins), "Labels and proteins length mismatch"
-    print("Split:", split,"Number of proteins:", len(proteins), "Number of proteins:", len(labels))
+    print("Split:", split, "Number of proteins:", len(proteins), "Number of proteins:", len(labels))
 
     pos_pairs = []
     neg_pairs = []
@@ -88,15 +88,49 @@ def prep_pairs(split, go_terms):
                 f_tgt.write(pair[1] + "\n")
 
 
+def filter_files(src_file, labels_file, train_labels):
+    with open(src_file, "r") as f:
+        src_lines = f.read().splitlines()
+    with open(labels_file, "r") as f:
+        labels_lines = f.read().splitlines()
+    src = []
+    labels = []
+    for i in range(len(labels_lines)):
+        labels_candidate = labels_lines[i]
+        if labels_candidate in train_labels:
+            src.append(src_lines[i])
+            labels.append(labels_candidate)
+    print("Number of src lines:", len(src_lines), "Number of labels lines:", len(labels_lines))
+    print("Number of src lines after filtering:", len(src), "Number of labels lines after filtering:", len(labels))
+    with open(src_file, "w") as f:
+        for line in src:
+            f.write(line + "\n")
+    with open(labels_file, "w") as f:
+        for line in labels:
+            f.write(line + "\n")
+
+
+def remove_not_in_train_labels():
+    with open("data/mf/train_enzyme.txt", "r") as f:
+        train_labels = f.read().splitlines()
+    train_labels = set(train_labels)
+    filter_files("data/mf/valid_reaction.txt", "data/mf/valid_enzyme.txt", train_labels)
+    filter_files("data/mf/valid_reaction_neg.txt", "data/mf/valid_enzyme_neg.txt", train_labels)
+    filter_files("data/mf/test_reaction.txt", "data/mf/test_enzyme.txt", train_labels)
+    filter_files("data/mf/test_reaction_neg.txt", "data/mf/test_enzyme_neg.txt", train_labels)
+
+
 if __name__ == "__main__":
     # prep_go()
     prep_protein("train")
     prep_protein("test")
     prep_protein("valid")
-
     with open("data/mf/go_info.txt", "r") as f:
         go_terms = f.read().splitlines()
 
     prep_pairs("train", go_terms)
     prep_pairs("test", go_terms)
     prep_pairs("valid", go_terms)
+
+    remove_not_in_train_labels()
+
