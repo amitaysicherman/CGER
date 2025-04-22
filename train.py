@@ -578,7 +578,7 @@ if __name__ == "__main__":
     encoder_dim = ENCODER_DIM
     if args.level == "mf":
         encoder_dim = 1280
-    if args.level != "easy":
+    elif args.level != "easy":
         encoder_dim = 768
     if args.gen_mol:
         encoder_dim = 1280
