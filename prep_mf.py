@@ -114,6 +114,7 @@ def remove_not_in_train_labels():
     with open("data/mf/train_enzyme.txt", "r") as f:
         train_labels = f.read().splitlines()
     train_labels = set(train_labels)
+    filter_files("data/mf/train_reaction_neg.txt", "data/mf/train_enzyme_neg.txt", train_labels)
     filter_files("data/mf/valid_reaction.txt", "data/mf/valid_enzyme.txt", train_labels)
     filter_files("data/mf/valid_reaction_neg.txt", "data/mf/valid_enzyme_neg.txt", train_labels)
     filter_files("data/mf/test_reaction.txt", "data/mf/test_enzyme.txt", train_labels)
