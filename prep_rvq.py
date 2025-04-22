@@ -12,15 +12,11 @@ parser.add_argument("--n_clusters", type=int, default=15, help="Number of cluste
 parser.add_argument("--random_state", type=int, default=42, help="Random state for KMeans")
 parser.add_argument("--is_molecules", action="store_true", help="Flag to indicate if the input is molecules")
 parser.add_argument("--ds", type=str, default="drugbank", help="Dataset name")
+parser.add_argument("--is_text", action="store_true", help="Flag to indicate if the input is text")
 args = parser.parse_args()
 ds = args.ds
-# class Args:
-#     def __init__(self, n_layers=10, n_clusters=10, random_state=42, is_molecules=False):
-#
-#         self.n_clusters = n_clusters
-#         self.random_state = random_state
-#         self.is_molecules = is_molecules
-# args = Args()
+is_text = args.is_text
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -85,16 +81,21 @@ class ResidualVectorQuantizer:
         return codes
 
 
-def get_model_tokenizer(is_molecules: bool):
-    if is_molecules:
-        tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
-
-        model = AutoModel.from_pretrained("ibm/MoLFormer-XL-both-10pct", deterministic_eval=True,
-                                          trust_remote_code=True)
+def get_model_tokenizer(is_molecules: bool, is_text=False):
+    if is_text:
+        tokenizer = AutoTokenizer.from_pretrained("neuml/pubmedbert-base-embeddings")
+        model = AutoModel.from_pretrained("neuml/pubmedbert-base-embeddings")
 
     else:
-        tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
-        model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
+        if is_molecules:
+            tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+
+            model = AutoModel.from_pretrained("ibm/MoLFormer-XL-both-10pct", deterministic_eval=True,
+                                              trust_remote_code=True)
+
+        else:
+            tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
+            model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
     return tokenizer, model
 
 
@@ -108,7 +109,7 @@ def get_lines(is_molecules: bool, ds: str):
     return lines
 
 
-tokenizer, model = get_model_tokenizer(args.is_molecules)
+tokenizer, model = get_model_tokenizer(args.is_molecules, args.is_text)
 model = model.to(device)
 lines = get_lines(args.is_molecules, ds)
 
@@ -118,7 +119,11 @@ for line in tqdm(lines):
     tokens = tokenizer(line, return_tensors="pt", padding=False, truncation=True, max_length=512)
     tokens = {k: v.to(device) for k, v in tokens.items()}
     outputs = model(**tokens)
-    embeddings.append(outputs['last_hidden_state'][0].mean(dim=0).detach().cpu().numpy())
+    if is_text:
+        emb = outputs[0][0].mean(dim=0).detach().cpu().numpy()
+    else:
+        emb = outputs['last_hidden_state'][0].mean(dim=0).detach().cpu().numpy()
+    embeddings.append(emb)
 embeddings = np.stack(embeddings)
 
 rvq = ResidualVectorQuantizer(
