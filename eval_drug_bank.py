@@ -121,7 +121,7 @@ def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
 
 
 def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False, best_acc_threshold=None,
-                   best_f1_threshold=None):
+                   best_f1_threshold=None,auc_only=False):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
     neg_dataloader = DataLoader(neg_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataset)}")
@@ -148,6 +148,8 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
         return y_true, y_scores
 
     auc_score = roc_auc_score(y_true, y_scores)
+    if auc_only:
+        return auc_score, None, None, None, None
     if best_acc_threshold is None:
         best_acc_threshold, best_acc_score = find_optimal_threshold(y_true, y_scores, metric='accuracy')
     else:
