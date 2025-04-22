@@ -487,12 +487,14 @@ class EnzymeDecoder(torch.nn.Module):
         return decoder_outputs
 
 
-def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model):
+def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model,batch_size=64):
     auc_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1 = evaluate_model(pos_valid,
-                                                                                                     neg_valid, model)
+                                                                                                     neg_valid, model,
+                                                                                                     batch_size=batch_size)
     test_auc_score, _, test_best_acc_score, _, test_best_score_f1 = evaluate_model(pos_test, neg_test, model,
                                                                                    best_acc_threshold=best_acc_threshold,
-                                                                                   best_f1_threshold=best_f1_threshold)
+                                                                                   best_f1_threshold=best_f1_threshold,
+                                                                                   batch_size=batch_size)
     return {"auc": auc_score, "auc_test": test_auc_score, "acc": best_acc_score, "f1": best_score_f1,
             "acc_test": test_best_acc_score, "f1_test": test_best_score_f1}
 
@@ -608,7 +610,7 @@ if __name__ == "__main__":
                                                             train_encoder=args.train_encoder, quantize=args.quantize,
                                                             level=args.level)
 
-        compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model)
+        compute_metrics_func = lambda x: get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model,batch_size=args.batch_size)
 
         # subset with size 1, run the script
         test_dataset_dummy = torch.utils.data.Subset(test_dataset, [0])
