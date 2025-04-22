@@ -10,7 +10,7 @@ import os
 from sklearn.metrics import f1_score
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import roc_auc_score, accuracy_score,average_precision_score
 
 
 def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=None, quantize=False, level="drugbank"):
@@ -148,8 +148,10 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
         return y_true, y_scores
 
     auc_score = roc_auc_score(y_true, y_scores)
+    ap_score = average_precision_score(y_true, y_scores)
+
     if auc_only:
-        return auc_score, None, None, None, None
+        return auc_score,ap_score, None, None, None, None
     if best_acc_threshold is None:
         best_acc_threshold, best_acc_score = find_optimal_threshold(y_true, y_scores, metric='accuracy')
     else:
@@ -158,7 +160,7 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
         best_threshold_f1, best_score_f1 = find_optimal_threshold(y_true, y_scores, metric='f1')
     else:
         best_score_f1 = f1_score(y_true, (y_scores >= best_f1_threshold).astype(int))
-    return auc_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1
+    return auc_score,ap_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1
 
 
 def get_best_cp(base_path):
