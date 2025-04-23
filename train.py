@@ -375,8 +375,10 @@ def compute_metrics(eval_preds):
     }
 
 
-def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels=None, entropy_normalize=False):
-    trie_mask = build_mask_from_trie(trie, input_ids, vocab_size)
+def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels=None, entropy_normalize=False,
+                            path_weights_normalize=False):
+    trie_mask, path_weights = build_mask_from_trie(trie, input_ids, vocab_size, return_path_weights=True)
+
     trie_mask = trie_mask[:, :-1, :]
     trie_mask_out = trie_mask.sum(dim=-1) <= 1
     decoder_outputs.trie_mask_out = trie_mask_out
@@ -394,18 +396,37 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             normalized_logits = decoder_outputs.logits[:, :-1] * (1.0 / info_weights_expanded)
             decoder_outputs.logits[:, :-1] = normalized_logits
 
-        loss_fct = CrossEntropyLoss(ignore_index=-100)
-        decoder_outputs.loss = loss_fct(
-            decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
-            labels[:, 1:].reshape(-1))
+        if path_weights_normalize:
+            path_weights = path_weights[:, 1:] + 1e-6
+            path_weights = path_weights.to(decoder_outputs.logits.device)
+            path_weights = path_weights.view(-1)
+
+            # Compute weighted cross entropy loss
+            loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='none')
+            per_token_loss = loss_fct(
+                decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
+                labels[:, 1:].reshape(-1))  # shape: (batch_size * seq_len)
+            per_token_loss = per_token_loss.view(labels[:, 1:].shape)
+            per_token_loss = per_token_loss * path_weights
+            per_token_loss = per_token_loss.sum() / path_weights.sum()
+            decoder_outputs.loss = per_token_loss
+
+        else:
+            loss_fct = CrossEntropyLoss(ignore_index=-100)
+            decoder_outputs.loss = loss_fct(
+                decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
+                labels[:, 1:].reshape(-1))
     return decoder_outputs
 
 
 class EndToEndModel(torch.nn.Module):
-    def __init__(self, encoder, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, pooling=False):
+    def __init__(self, encoder, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, pooling=False,
+                 entropy_normalize=False,path_weights_normalize=False):
         super(EndToEndModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
+        self.entropy_normalize = entropy_normalize
+        self.path_weights_normalize = path_weights_normalize
         self.trie = trie
         self.pooling = pooling
 
@@ -450,15 +471,18 @@ class EndToEndModel(torch.nn.Module):
         if self.trie is None:
             return decoder_outputs
         decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels)
+                                                  labels,entropy_normalize=self.entropy_normalize,path_weights_normalize=self.path_weights_normalize)
         return decoder_outputs
 
 
 class EnzymeDecoder(torch.nn.Module):
-    def __init__(self, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0):
+    def __init__(self, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, entropy_normalize=False,
+                 path_weights_normalize=False):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
+        self.entropy_normalize = entropy_normalize
+        self.path_weights_normalize = path_weights_normalize
         if bottleneck_dim > 0:
             self.encoder_project = torch.nn.Sequential(
                 torch.nn.Linear(encoder_dim, bottleneck_dim),
@@ -484,7 +508,7 @@ class EnzymeDecoder(torch.nn.Module):
             return decoder_outputs
 
         decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels)
+                                                  labels,entropy_normalize=self.entropy_normalize,path_weights_normalize=self.path_weights_normalize)
         return decoder_outputs
 
 
@@ -533,7 +557,8 @@ if __name__ == "__main__":
     parser.add_argument("--train_encoder", type=int, default=0,
                         help="Whether to train the encoder (1) or freeze it (0)")
     parser.add_argument("--quantize", type=int, default=0)
-
+    parser.add_argument("--entropy_normalize", type=int, default=0)
+    parser.add_argument("--path_weights_normalize", type=int, default=0)
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
@@ -599,14 +624,18 @@ if __name__ == "__main__":
             trie=trie,
             encoder_dim=encoder_dim,
             bottleneck_dim=args.bottleneck_dim,
-            pooling=args.pooling
+            pooling=args.pooling,
+            entropy_normalize=args.entropy_normalize,
+            path_weights_normalize=args.path_weights_normalize
         )
     else:
         model = EnzymeDecoder(
             decoder,
             trie=trie,
             encoder_dim=encoder_dim,
-            bottleneck_dim=args.bottleneck_dim
+            bottleneck_dim=args.bottleneck_dim,
+            entropy_normalize=args.entropy_normalize,
+            path_weights_normalize=args.path_weights_normalize
         )
 
     if args.level != "easy":
