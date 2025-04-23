@@ -13,8 +13,6 @@ from transformers import AutoModel
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if torch.backends.mps.is_available():
-    device = torch.device("mps")
 
 hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
 num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
@@ -390,15 +388,16 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
         labels[:, 1:][trie_mask_out] = -100
         if entropy_normalize:
             valid_token_count = trie_mask.sum(dim=-1)
-            print(f"valid_token_count: {valid_token_count.min()}, {valid_token_count.max()}")
             information_weights = torch.log(valid_token_count + 1)  # add 1 to avoid log(1)=0
-            print(f"information_weights: {information_weights.min()}, {information_weights.max()}")
             info_weights_expanded = information_weights.unsqueeze(-1)
             normalized_logits = decoder_outputs.logits[:, :-1] * info_weights_expanded
             decoder_outputs.logits[:, :-1] = normalized_logits
 
         if path_weights_normalize:
-            path_weights = path_weights[:, 1:] + 1e-6
+            path_weights = path_weights[:, 1:]
+            path_weights = (trie.total_paths * path_weights + 1).log()
+            path_weights = path_weights / path_weights.sum(dim=-1, keepdim=True)
+
             path_weights = path_weights.to(decoder_outputs.logits.device)
             path_weights = path_weights.view(-1)
 
@@ -407,9 +406,6 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             per_token_loss = loss_fct(
                 decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
                 labels[:, 1:].reshape(-1))  # shape: (batch_size * seq_len)
-            print("--------------------")
-            print(per_token_loss.tolist())
-            print(path_weights.tolist())
             per_token_loss = per_token_loss * path_weights
             per_token_loss = per_token_loss.sum() / path_weights.sum()
             decoder_outputs.loss = per_token_loss
@@ -499,7 +495,6 @@ class EnzymeDecoder(torch.nn.Module):
             )
 
     def forward(self, input_ids, attention_mask, encoder_outputs, encoder_attention_mask, labels):
-        # Encode the input
         encoder_outputs = self.encoder_project(encoder_outputs)
         decoder_outputs = self.decoder(
             input_ids=input_ids,
@@ -524,16 +519,17 @@ def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model, batch_si
         batch_size=batch_size,
         auc_only=auc_only,
         use_f1_max=auc_only)
-    test_auc_score, test_ap_score, _, test_best_acc_score, _, test_best_score_f1, fmax = evaluate_model(pos_test,
-                                                                                                        neg_test, model,
-                                                                                                        best_acc_threshold=best_acc_threshold,
-                                                                                                        best_f1_threshold=best_f1_threshold,
-                                                                                                        batch_size=batch_size,
-                                                                                                        auc_only=auc_only,
-                                                                                                        use_f1_max=auc_only)
+    test_auc_score, test_ap_score, _, test_best_acc_score, _, test_best_score_f1, test_fmax = evaluate_model(pos_test,
+                                                                                                             neg_test,
+                                                                                                             model,
+                                                                                                             best_acc_threshold=best_acc_threshold,
+                                                                                                             best_f1_threshold=best_f1_threshold,
+                                                                                                             batch_size=batch_size,
+                                                                                                             auc_only=auc_only,
+                                                                                                             use_f1_max=auc_only)
     return {"auc": auc_score, "auc_test": test_auc_score, "acc": best_acc_score, "f1": best_score_f1,
             "acc_test": test_best_acc_score, "f1_test": test_best_score_f1, "ap": ap_score, "ap_test": test_ap_score,
-            "fmax": fmax, "fmax_test": fmax}
+            "fmax": fmax, "fmax_test": test_fmax}
 
 
 if __name__ == "__main__":
