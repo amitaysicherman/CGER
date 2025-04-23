@@ -391,6 +391,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
         if entropy_normalize:
             information_weights = torch.log(valid_token_count + 1+1e-6)  # add 2 to avoid log(1)=0
             info_weights_expanded = information_weights.unsqueeze(-1)
+            info_weights_expanded=info_weights_expanded.to(decoder_outputs.logits.device)
             normalized_logits = decoder_outputs.logits[:, :-1] / info_weights_expanded
             decoder_outputs.logits[:, :-1] = normalized_logits
 
