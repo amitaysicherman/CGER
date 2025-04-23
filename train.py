@@ -390,10 +390,8 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
         labels[:, 1:][trie_mask_out] = -100
         if entropy_normalize:
             valid_token_count = trie_mask.sum(dim=-1)
-            epsilon = 1e-6
-            information_weights = torch.log(valid_token_count + epsilon)
+            information_weights = torch.log(valid_token_count + 1)  # add 1 to avoid log(1)=0
             info_weights_expanded = information_weights.unsqueeze(-1)
-            info_weights_expanded= torch.clamp(info_weights_expanded, min=epsilon)
             normalized_logits = decoder_outputs.logits[:, :-1] * (1.0 / info_weights_expanded)
             decoder_outputs.logits[:, :-1] = normalized_logits
 
@@ -421,7 +419,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
 
 class EndToEndModel(torch.nn.Module):
     def __init__(self, encoder, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, pooling=False,
-                 entropy_normalize=False,path_weights_normalize=False):
+                 entropy_normalize=False, path_weights_normalize=False):
         super(EndToEndModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -471,7 +469,8 @@ class EndToEndModel(torch.nn.Module):
         if self.trie is None:
             return decoder_outputs
         decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels,entropy_normalize=self.entropy_normalize,path_weights_normalize=self.path_weights_normalize)
+                                                  labels, entropy_normalize=self.entropy_normalize,
+                                                  path_weights_normalize=self.path_weights_normalize)
         return decoder_outputs
 
 
@@ -508,7 +507,8 @@ class EnzymeDecoder(torch.nn.Module):
             return decoder_outputs
 
         decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels,entropy_normalize=self.entropy_normalize,path_weights_normalize=self.path_weights_normalize)
+                                                  labels, entropy_normalize=self.entropy_normalize,
+                                                  path_weights_normalize=self.path_weights_normalize)
         return decoder_outputs
 
 
