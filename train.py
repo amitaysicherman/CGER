@@ -375,6 +375,24 @@ def compute_metrics(eval_preds):
     }
 
 
+def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels=None,entropy_normalize=False):
+    trie_mask = build_mask_from_trie(trie, input_ids, vocab_size)
+    trie_mask = trie_mask[:, :-1, :]
+    trie_mask_out = trie_mask.sum(dim=-1) <= 1
+    decoder_outputs.trie_mask_out = trie_mask_out
+    trie_mask = trie_mask.masked_fill(trie_mask == 0, -1e6)
+    trie_mask = trie_mask.masked_fill(trie_mask == 1, 0)
+    trie_mask = trie_mask.to(decoder_outputs.logits.device)
+    decoder_outputs.logits[:, :-1] += trie_mask
+    if labels is not None:
+        labels[:, 1:][trie_mask_out] = -100
+        loss_fct = CrossEntropyLoss(ignore_index=-100)
+        decoder_outputs.loss = loss_fct(
+            decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
+            labels[:, 1:].reshape(-1))
+    return decoder_outputs
+
+
 class EndToEndModel(torch.nn.Module):
     def __init__(self, encoder, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, pooling=False):
         super(EndToEndModel, self).__init__()
@@ -423,21 +441,8 @@ class EndToEndModel(torch.nn.Module):
         # Apply trie constraints if needed
         if self.trie is None:
             return decoder_outputs
-
-        trie_mask = build_mask_from_trie(self.trie, input_ids, self.decoder.config.vocab_size)
-        trie_mask = trie_mask[:, :-1, :]
-        trie_mask_out = trie_mask.sum(dim=-1) <= 1
-        decoder_outputs.trie_mask_out = trie_mask_out
-        trie_mask = trie_mask.masked_fill(trie_mask == 0, -1e6)
-        trie_mask = trie_mask.masked_fill(trie_mask == 1, 0)
-        trie_mask = trie_mask.to(decoder_outputs.logits.device)
-        decoder_outputs.logits[:, :-1] += trie_mask
-        if labels is not None:
-            labels[:, 1:][trie_mask_out] = -100
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            decoder_outputs.loss = loss_fct(
-                decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
-                labels[:, 1:].reshape(-1))
+        decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
+                                                  labels)
         return decoder_outputs
 
 
@@ -470,20 +475,8 @@ class EnzymeDecoder(torch.nn.Module):
         if self.trie is None:
             return decoder_outputs
 
-        trie_mask = build_mask_from_trie(self.trie, input_ids, self.decoder.config.vocab_size)
-        trie_mask = trie_mask[:, :-1, :]
-        trie_mask_out = trie_mask.sum(dim=-1) <= 1
-        decoder_outputs.trie_mask_out = trie_mask_out
-        trie_mask = trie_mask.masked_fill(trie_mask == 0, -1e6)
-        trie_mask = trie_mask.masked_fill(trie_mask == 1, 0)
-        trie_mask = trie_mask.to(decoder_outputs.logits.device)
-        decoder_outputs.logits[:, :-1] += trie_mask
-        if labels is not None:
-            labels[:, 1:][trie_mask_out] = -100
-            loss_fct = CrossEntropyLoss(ignore_index=-100)
-            decoder_outputs.loss = loss_fct(
-                decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
-                labels[:, 1:].reshape(-1))
+        decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
+                                                  labels)
         return decoder_outputs
 
 
