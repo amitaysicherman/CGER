@@ -683,7 +683,7 @@ if __name__ == "__main__":
     if args.entropy_normalize:
         output_dir += "_entropy"
     if args.path_weights_normalize:
-        output_dir += "_path"
+        output_dir += "_pathinv"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
