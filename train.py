@@ -380,6 +380,8 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
     trie_mask = trie_mask[:, :-1, :]
     trie_mask_out = trie_mask.sum(dim=-1) <= 1
     decoder_outputs.trie_mask_out = trie_mask_out
+    valid_token_count = trie_mask.sum(dim=-1)
+
     trie_mask = trie_mask.masked_fill(trie_mask == 0, -1e6)
     trie_mask = trie_mask.masked_fill(trie_mask == 1, 0)
     trie_mask = trie_mask.to(decoder_outputs.logits.device)
@@ -387,10 +389,9 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
     if labels is not None:
         labels[:, 1:][trie_mask_out] = -100
         if entropy_normalize:
-            valid_token_count = trie_mask.sum(dim=-1)
-            information_weights = torch.log(valid_token_count + 1)  # add 1 to avoid log(1)=0
+            information_weights = torch.log(valid_token_count + 1+1e-6)  # add 2 to avoid log(1)=0
             info_weights_expanded = information_weights.unsqueeze(-1)
-            normalized_logits = decoder_outputs.logits[:, :-1] * info_weights_expanded
+            normalized_logits = decoder_outputs.logits[:, :-1] / info_weights_expanded
             decoder_outputs.logits[:, :-1] = normalized_logits
 
         if path_weights_normalize:
