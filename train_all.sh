@@ -11,9 +11,9 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
-"python train.py --path_weights_normalize 1"
-"python train.py --entropy_normalize 1"
-"python train.py --entropy_normalize 1 --path_weights_normalize 1"
+"python train.py --path_weights_normalize 1 --dropout 0.2"
+"python train.py --entropy_normalize 1 --dropout 0.2"
+"python train.py --entropy_normalize 1 --path_weights_normalize 1 --dropout 0.2"
 )
 
 # Get the config for the current index
