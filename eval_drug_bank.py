@@ -10,7 +10,45 @@ import os
 from sklearn.metrics import f1_score
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-from sklearn.metrics import roc_auc_score, accuracy_score,average_precision_score
+from sklearn.metrics import roc_auc_score, accuracy_score, average_precision_score
+
+
+def f1_max(pred, target):
+    """
+    F1 score with the optimal threshold.
+
+    This function first enumerates all possible thresholds for deciding positive and negative
+    samples, and then pick the threshold with the maximal F1 score.
+
+    Parameters:
+        pred (Tensor): predictions of shape :math:`(B, N)`
+        target (Tensor): binary targets of shape :math:`(B, N)`
+    """
+    order = pred.argsort(descending=True, dim=1)
+    target = target.gather(1, order)
+    precision = target.cumsum(1) / torch.ones_like(target).cumsum(1)
+    recall = target.cumsum(1) / (target.sum(1, keepdim=True) + 1e-10)
+    is_start = torch.zeros_like(target).bool()
+    is_start[:, 0] = 1
+    is_start = torch.scatter(is_start, 1, order, is_start)
+
+    all_order = pred.flatten().argsort(descending=True)
+    order = order + torch.arange(order.shape[0], device=order.device).unsqueeze(1) * order.shape[1]
+    order = order.flatten()
+    inv_order = torch.zeros_like(order)
+    inv_order[order] = torch.arange(order.shape[0], device=order.device)
+    is_start = is_start.flatten()[all_order]
+    all_order = inv_order[all_order]
+    precision = precision.flatten()
+    recall = recall.flatten()
+    all_precision = precision[all_order] - \
+                    torch.where(is_start, torch.zeros_like(precision), precision[all_order - 1])
+    all_precision = all_precision.cumsum(0) / is_start.cumsum(0)
+    all_recall = recall[all_order] - \
+                 torch.where(is_start, torch.zeros_like(recall), recall[all_order - 1])
+    all_recall = all_recall.cumsum(0) / pred.shape[0]
+    all_f1 = 2 * all_precision * all_recall / (all_precision + all_recall + 1e-10)
+    return all_f1.max()
 
 
 def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=None, quantize=False, level="drugbank"):
@@ -38,7 +76,7 @@ def load_negative_files(split, mol, cold_smiles=0, cold_fasta=0, random_replace=
 
 
 def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_files=False, cold_smiles=0, cold_fasta=0,
-             random_replace=None, train_encoder=False, quantize=False,level="drugbank"):
+             random_replace=None, train_encoder=False, quantize=False, level="drugbank"):
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=level, gen_mol=gen_mol,
                                                                                 cold_smiles=cold_smiles,
                                                                                 cold_fasta=cold_fasta,
@@ -58,10 +96,10 @@ def get_data(pooling, src_model, src_tokenizer, tgt_tokenizer, gen_mol, return_f
         pos_test = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer, src_model, pooling=pooling)
 
     src_neg_valid, tgt_neg_valid = load_negative_files("valid", gen_mol, cold_smiles=cold_smiles, cold_fasta=cold_fasta,
-                                                       random_replace=random_replace, quantize=quantize,level=level)
+                                                       random_replace=random_replace, quantize=quantize, level=level)
 
     src_neg_test, tgt_neg_test = load_negative_files("test", gen_mol, cold_smiles=cold_smiles, cold_fasta=cold_fasta,
-                                                     random_replace=random_replace, quantize=quantize,level=level)
+                                                     random_replace=random_replace, quantize=quantize, level=level)
     if train_encoder:
         neg_valid = SrcTgtDataset(src_neg_valid, tgt_neg_valid, src_tokenizer, tgt_tokenizer, None, pooling=pooling,
                                   train_encoder=True)
@@ -121,7 +159,7 @@ def find_optimal_threshold(y_true, y_scores, metric='accuracy'):
 
 
 def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=False, best_acc_threshold=None,
-                   best_f1_threshold=None,auc_only=False):
+                   best_f1_threshold=None, auc_only=False, use_f1_max=False):
     pos_dataloader = DataLoader(pos_dataset, batch_size=batch_size, shuffle=False)
     neg_dataloader = DataLoader(neg_dataset, batch_size=batch_size, shuffle=False)
     print(f"Number of positive examples: {len(pos_dataset)}")
@@ -149,9 +187,12 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
 
     auc_score = roc_auc_score(y_true, y_scores)
     ap_score = average_precision_score(y_true, y_scores)
+    f1_max_score = None
+    if use_f1_max:
+        f1_max_score = f1_max(torch.tensor(y_scores).to(device), torch.tensor(y_true).to(device))
 
     if auc_only:
-        return auc_score,ap_score, None, None, None, None
+        return auc_score, ap_score, None, None, None, None, f1_max_score
     if best_acc_threshold is None:
         best_acc_threshold, best_acc_score = find_optimal_threshold(y_true, y_scores, metric='accuracy')
     else:
@@ -160,7 +201,7 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
         best_threshold_f1, best_score_f1 = find_optimal_threshold(y_true, y_scores, metric='f1')
     else:
         best_score_f1 = f1_score(y_true, (y_scores >= best_f1_threshold).astype(int))
-    return auc_score,ap_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1
+    return auc_score, ap_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1,f1_max_score
 
 
 def get_best_cp(base_path):
@@ -197,7 +238,8 @@ class Config:
                 self.cold_fasta, self.quantize]
 
 
-def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=False, level="drugbank"):
+def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol, quantize=False,
+              level="drugbank"):
     encoder_dim = 768 if not mol else 1280
     model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -241,7 +283,8 @@ def main():
                                                                         gen_mol=mol,
                                                                         return_files=True,
                                                                         cold_smiles=cold_smiles,
-                                                                        cold_fasta=cold_fasta, quantize=quantize,level=LEVEL)
+                                                                        cold_fasta=cold_fasta, quantize=quantize,
+                                                                        level=LEVEL)
 
         if quantize:
             from train import QuantizeTokenizer
@@ -250,7 +293,8 @@ def main():
         trie = build_trie(list(set(trie_files)), esm_tokenizer, max_length=512)
         reaction_model.to(device).eval()
         decoder.to(device).eval()
-        model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol,quantize=quantize, level=LEVEL)
+        model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol, quantize=quantize,
+                          level=LEVEL)
 
         y_true, y_scores = evaluate_model(pos_test, neg_test, model, batch_size=32, return_prob=True)
         all_scores.append(y_scores)
