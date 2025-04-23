@@ -390,6 +390,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
         labels[:, 1:][trie_mask_out] = -100
         if entropy_normalize:
             valid_token_count = trie_mask.sum(dim=-1)
+            print(f"valid_token_count: {valid_token_count.min()}, {valid_token_count.max()}")
             information_weights = torch.log(valid_token_count + 1)  # add 1 to avoid log(1)=0
             print(f"information_weights: {information_weights.min()}, {information_weights.max()}")
             info_weights_expanded = information_weights.unsqueeze(-1)
