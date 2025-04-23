@@ -555,7 +555,7 @@ if __name__ == "__main__":
     parser.add_argument("--random_tgt", type=int, default=0)
     parser.add_argument("--train_encoder", type=int, default=0,
                         help="Whether to train the encoder (1) or freeze it (0)")
-    parser.add_argument("--quantize", type=int, default=0)
+    parser.add_argument("--quantize", type=int, default=1)
     parser.add_argument("--entropy_normalize", type=int, default=0)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
     args = parser.parse_args()
@@ -678,6 +678,10 @@ if __name__ == "__main__":
         output_dir += f"_trainenc"
     if args.quantize:
         output_dir += "_quantize"
+    if args.entropy_normalize:
+        output_dir += "_entropy"
+    if args.path_weights_normalize:
+        output_dir += "_path"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
