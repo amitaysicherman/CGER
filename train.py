@@ -1,7 +1,7 @@
 import torch
 from transformers import BertGenerationDecoder, BertGenerationConfig, AutoTokenizer
 from transformers import Trainer, TrainingArguments
-
+from torch.nn import functional as F
 from rxnfp.main import get_model_and_tokenizer
 from trie import build_mask_from_trie, build_trie
 from torch.utils.data import Dataset as TorchDataset
@@ -375,7 +375,7 @@ def compute_metrics(eval_preds):
     }
 
 
-def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels=None,entropy_normalize=False):
+def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels=None, entropy_normalize=False):
     trie_mask = build_mask_from_trie(trie, input_ids, vocab_size)
     trie_mask = trie_mask[:, :-1, :]
     trie_mask_out = trie_mask.sum(dim=-1) <= 1
@@ -386,6 +386,14 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
     decoder_outputs.logits[:, :-1] += trie_mask
     if labels is not None:
         labels[:, 1:][trie_mask_out] = -100
+        if entropy_normalize:
+            valid_token_count = trie_mask.sum(dim=-1)
+            epsilon = 1e-10
+            information_weights = torch.log(valid_token_count + epsilon)
+            info_weights_expanded = information_weights.unsqueeze(-1)
+            normalized_logits = decoder_outputs.logits[:, :-1] * (1.0 / info_weights_expanded)
+            decoder_outputs.logits[:, :-1] = normalized_logits
+
         loss_fct = CrossEntropyLoss(ignore_index=-100)
         decoder_outputs.loss = loss_fct(
             decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),

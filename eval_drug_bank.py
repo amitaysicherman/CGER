@@ -189,7 +189,9 @@ def evaluate_model(pos_dataset, neg_dataset, model, batch_size=32, return_prob=F
     ap_score = average_precision_score(y_true, y_scores)
     f1_max_score = None
     if use_f1_max:
-        f1_max_score = f1_max(torch.tensor(y_scores).to(device), torch.tensor(y_true).to(device))
+        y_scores_torch = torch.tensor(y_scores).to(device).unsqueeze(1) #shape (N,1)
+        y_true_torch = torch.tensor(y_true).to(device).unsqueeze(1) #shape (N,1)
+        f1_max_score = f1_max(y_scores_torch, y_true_torch)
 
     if auc_only:
         return auc_score, ap_score, None, None, None, None, f1_max_score
