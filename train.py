@@ -408,8 +408,8 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
                 decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
                 labels[:, 1:].reshape(-1))  # shape: (batch_size * seq_len)
             print("--------------------")
-            print(per_token_loss[0].tolist())
-            print(path_weights[0].tolist())
+            print(per_token_loss.tolist())
+            print(path_weights.tolist())
             per_token_loss = per_token_loss * path_weights
             per_token_loss = per_token_loss.sum() / path_weights.sum()
             decoder_outputs.loss = per_token_loss
