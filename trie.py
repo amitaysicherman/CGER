@@ -171,7 +171,7 @@ if __name__ == "__main__":
     exp = "1 10 0 14 9 14 0 5 2 10 13 2 12 5 5 10 11 0 0 0 0 6 0 0 0 7 0 0 0 0 3 0 0 0 0 5 0 0 13 3 0 0 13 5 0 7 12 0 0 0 0 0 1 8 0 0 0 0 13 0 7 10 0 0 0 0 0 0 13 3 13 2 0 0 0 0 0 11 0 8 0 0 0 0 0 9 9 14 14 1 0 0 0 0 0 0 3 0 0 0 0 0 9 4 8 0 0 0 0 13 0 0 5 9 0 0 9 0 14 9 0 0 3 2".split()
     exp = [int(float(x)) for x in exp]
     exp = [esm_tokenizer.bos_token_id] + exp + [esm_tokenizer.pad_token_id]
-    mask, path_weights = build_mask_from_trie(trie, torch.tensor(exp).unsqueeze(0), vocab_size=esm_tokenizer.vocab_size)
+    mask, path_weights = build_mask_from_trie(trie, torch.tensor(exp).unsqueeze(0), vocab_size=esm_tokenizer.vocab_size,return_path_weights=True)
     print("Mask shape:", mask.shape)
     print("Path weights shape:", path_weights.shape)
     print("Mask:", mask)
