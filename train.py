@@ -685,7 +685,7 @@ if __name__ == "__main__":
     eval_logging_callback = EvalLoggingCallback(output_dir=output_dir)
     trainer.add_callback(eval_logging_callback)
 
-    print(trainer.evaluate(eval_dataset["valid"]))
+    # print(trainer.evaluate(eval_dataset["valid"]))
     # Train model
     print("Training model...")
 
