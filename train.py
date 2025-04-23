@@ -154,7 +154,7 @@ class RamdomReplace:
 
 
 def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False,
-                        is_text=False):
+                        is_text=False,quantize=0):
     if is_text:
         src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
@@ -174,7 +174,8 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=F
     else:
         src_model, src_tokenizer = get_model_and_tokenizer()
         tgt_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
-
+    if quantize:
+        tgt_tokenizer = QuantizeTokenizer()
     src_model.to(device)
 
     # Set model state based on train_encoder flag
@@ -573,11 +574,8 @@ if __name__ == "__main__":
                                                                            drugbank=args.level != "easy",
                                                                            gen_mol=args.gen_mol,
                                                                            train_encoder=args.train_encoder,
-                                                                           is_text=args.level == "mf")
-    if args.quantize:
-        tgt_tokenizer = QuantizeTokenizer()
-
-    # Create datasets and dataloaders
+                                                                           is_text=args.level == "mf",
+                                                                           quantize=args.quantize)
     random_replace = None
     if args.random_tgt:
         vocab_siz = len(tgt_tokenizer) if args.random_tgt == 1 else args.random_tgt
