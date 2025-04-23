@@ -4,21 +4,16 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=0-7
+#SBATCH --array=0-2
 
 level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --cold_fasta 1 --gen_mol 1 --quantize 1 "
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --cold_smiles 1 --quantize 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --gen_mol 1 --quantize 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --quantize 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --cold_fasta 1 --gen_mol 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --cold_smiles 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2 --gen_mol 1"
-"python train.py --level $level --pooling 1 --bottleneck_dim 128 --size 'l' --dropout 0.2"
+"python train.py --path_weights_normalize 1"
+"python train.py --entropy_normalize 1"
+"python train.py --entropy_normalize 1 --path_weights_normalize 1"
 )
 
 # Get the config for the current index
