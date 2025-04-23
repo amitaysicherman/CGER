@@ -406,7 +406,6 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             per_token_loss = loss_fct(
                 decoder_outputs.logits[:, :-1].reshape(-1, decoder_outputs.logits[:, :-1].size(-1)),
                 labels[:, 1:].reshape(-1))  # shape: (batch_size * seq_len)
-            per_token_loss = per_token_loss.view(labels[:, 1:].shape)
             per_token_loss = per_token_loss * path_weights
             per_token_loss = per_token_loss.sum() / path_weights.sum()
             decoder_outputs.loss = per_token_loss
