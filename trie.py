@@ -72,8 +72,6 @@ class Trie:
             current_paths = self.path_counts.get(current_prefix, 0)
 
             # Calculate the reduction ratio
-            print(
-                f"Token: {token}, Current paths: {current_paths}, Parent paths: {parent_paths}, Total paths: {self.total_paths}")
             reduction_ratio = (parent_paths - current_paths) / (
                     self.total_paths - 1) if parent_paths > 0 else 0  # - 1 is for the current path
             ratios.append(reduction_ratio)
