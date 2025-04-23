@@ -154,7 +154,7 @@ class RamdomReplace:
 
 
 def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False,
-                        is_text=False,quantize=0):
+                        is_text=False, quantize=0):
     if is_text:
         src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
@@ -390,9 +390,9 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
     if labels is not None:
         labels[:, 1:][trie_mask_out] = -100
         if entropy_normalize:
-            information_weights = torch.log(valid_token_count + 1+1e-6)  # add 2 to avoid log(1)=0
+            information_weights = torch.log(valid_token_count + 1 + 1e-6)  # add 2 to avoid log(1)=0
             info_weights_expanded = information_weights.unsqueeze(-1)
-            info_weights_expanded=info_weights_expanded.to(decoder_outputs.logits.device)
+            info_weights_expanded = info_weights_expanded.to(decoder_outputs.logits.device)
             normalized_logits = decoder_outputs.logits[:, :-1] / info_weights_expanded
             decoder_outputs.logits[:, :-1] = normalized_logits
 
@@ -400,7 +400,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             path_weights = path_weights[:, 1:]
             path_weights = (trie.total_paths * path_weights + 1).log()
             path_weights = path_weights / path_weights.sum(dim=-1, keepdim=True)
-
+            path_weights= 1 - path_weights
             path_weights = path_weights.to(decoder_outputs.logits.device)
             path_weights = path_weights.view(-1)
 
