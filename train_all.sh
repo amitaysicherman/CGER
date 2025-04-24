@@ -11,7 +11,7 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
-"python train.py --path_weights_normalize 1 --dropout 0.2 --level biosnap --quantize 0"
+"python train.py --path_weights_normalize 1 --dropout 0.2 --level biosnap --quantize 1"
 "python train.py --entropy_normalize 1 --dropout 0.2  --level biosnap"
 "python train.py --entropy_normalize 1 --path_weights_normalize 1 --dropout 0.2  --level biosnap"
 )

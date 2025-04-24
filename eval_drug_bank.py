@@ -241,7 +241,7 @@ class Config:
 
 
 def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol, quantize=False,
-              level="drugbank"):
+              level="drugbank", cold_smiles=0, cold_fasta=0):
     encoder_dim = 768 if not mol else 1280
     model = EnzymeDecoder(decoder, trie=trie, encoder_dim=encoder_dim, bottleneck_dim=bottleneck_dim)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -254,6 +254,11 @@ def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_ra
         output_dir += "_pooling"
     if mol:
         output_dir += "_mol"
+    if cold_smiles:
+        output_dir += "_cs"
+    if cold_fasta:
+        output_dir += "_cf"
+
     if quantize:
         output_dir += "_quantize"
     model_path = f"results_{level}/{output_dir}/"
