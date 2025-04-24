@@ -401,6 +401,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             path_weights = (trie.total_paths * path_weights + 1).log()
             path_weights = path_weights / path_weights.sum(dim=-1, keepdim=True)
             path_weights= 1 - path_weights
+
             path_weights = path_weights.to(decoder_outputs.logits.device)
             path_weights = path_weights.view(-1)
 

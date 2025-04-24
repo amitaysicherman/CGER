@@ -256,7 +256,7 @@ def get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_ra
         output_dir += "_mol"
     if quantize:
         output_dir += "_quantize"
-    model_path = f"results_db/{output_dir}/"
+    model_path = f"results_{level}/{output_dir}/"
     model_path = get_best_cp(model_path)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval().to(device)
