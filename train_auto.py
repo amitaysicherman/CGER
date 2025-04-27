@@ -22,9 +22,9 @@ class AutoDataset(torch.utils.data.Dataset):
         labels = inputs["input_ids"].clone()
         labels[labels == self.tokenizer.pad_token_id] = -100
         return {
-            "input_ids": inputs["input_ids"].squeeze(0).to(device),
-            "attention_mask": inputs["attention_mask"].squeeze(0).to(device),
-            "labels": labels.squeeze(0).to(device),
+            "input_ids": inputs["input_ids"].squeeze(0),
+            "attention_mask": inputs["attention_mask"].squeeze(0),
+            "labels": labels.squeeze(0),
         }
 
 
