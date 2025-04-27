@@ -155,11 +155,11 @@ class RamdomReplace:
 
 def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads, intermediate_size, dropout):
     encoder_config = BertGenerationConfig(
-        vocab_size=len(tgt_tokenizer.get_vocab()),
-        eos_token_id=tgt_tokenizer.eos_token_id,
-        pad_token_id=tgt_tokenizer.pad_token_id,
-        bos_token_id=tgt_tokenizer.bos_token_id,
-        decoder_start_token_id=tgt_tokenizer.pad_token_id,
+        vocab_size=len(tokenizer.get_vocab()),
+        eos_token_id=tokenizer.eos_token_id,
+        pad_token_id=tokenizer.pad_token_id,
+        bos_token_id=tokenizer.bos_token_id,
+        decoder_start_token_id=tokenizer.pad_token_id,
         is_encoder_decoder=True,
         is_decoder=True,
         add_cross_attention=True,
