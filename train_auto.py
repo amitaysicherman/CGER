@@ -162,7 +162,7 @@ if __name__ == "__main__":
                         help="Number of steps between evaluations.")
     parser.add_argument("--evaluation_strategy", type=str, default="steps",
                         help="Evaluation strategy.")
-    parser.add_argument("--metric_for_best_model", type=str, default="sample_accuracy",
+    parser.add_argument("--metric_for_best_model", type=str, default="eval_sample_accuracy",
                         help="Metric for selecting the best model.")
     parser.add_argument("--remove_unused_columns", type=bool, default=False,
                         help="Whether to remove unused columns.")
@@ -204,6 +204,9 @@ if __name__ == "__main__":
     dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
     train_dataset, eval_dataset = torch.utils.data.random_split(dataset,
                                                                 [int(0.9 * len(dataset)), int(0.1 * len(dataset))])
+
+    subset_indices = np.random.choice(len(train_dataset), size=len(eval_dataset), replace=False)
+    train_small_subset = torch.utils.data.Subset(dataset, subset_indices)
     from trie import build_trie
 
     trie = build_trie(dataset.sequences, tokenizer)
@@ -235,7 +238,10 @@ if __name__ == "__main__":
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        eval_dataset={
+            "train": train_small_subset,
+            "eval": eval_dataset
+        },
         compute_metrics=compute_metrics,
     )
 
