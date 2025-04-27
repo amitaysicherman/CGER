@@ -162,7 +162,7 @@ if __name__ == "__main__":
                         help="Number of steps between evaluations.")
     parser.add_argument("--evaluation_strategy", type=str, default="steps",
                         help="Evaluation strategy.")
-    parser.add_argument("--metric_for_best_model", type=str, default="eval_sample_accuracy",
+    parser.add_argument("--metric_for_best_model", type=str, default="eval_eval_sample_accuracy",
                         help="Metric for selecting the best model.")
     parser.add_argument("--remove_unused_columns", type=bool, default=False,
                         help="Whether to remove unused columns.")
