@@ -154,11 +154,11 @@ if __name__ == "__main__":
                         help="Learning rate for the optimizer.")
     parser.add_argument("--lr_scheduler_type", type=str, default="constant",
                         help="Learning rate scheduler type.")
-    parser.add_argument("--logging_steps", type=int, default=250,
+    parser.add_argument("--logging_steps", type=int, default=100,
                         help="Number of steps between logging.")
-    parser.add_argument("--save_steps", type=int, default=500,
+    parser.add_argument("--save_steps", type=int, default=250,
                         help="Number of steps between saving the model.")
-    parser.add_argument("--eval_steps", type=int, default=500,
+    parser.add_argument("--eval_steps", type=int, default=250,
                         help="Number of steps between evaluations.")
     parser.add_argument("--evaluation_strategy", type=str, default="steps",
                         help="Evaluation strategy.")
