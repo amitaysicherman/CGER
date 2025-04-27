@@ -766,5 +766,6 @@ if __name__ == "__main__":
     # Train model
     print("Training model...")
 
-    trainer.train(resume_from_checkpoint=len(glob.glob(pjoin(output_dir, "checkpoint-*"))) > 0)
+    # trainer.train(resume_from_checkpoint=len(glob.glob(pjoin(output_dir, "checkpoint-*"))) > 0)
+    trainer.train()
     print("Training complete!")
