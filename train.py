@@ -480,6 +480,8 @@ class EndToEndModel(torch.nn.Module):
                 encoder_hidden_states = encoder_outputs.pooler_output.unsqueeze(1)
             else:
                 encoder_hidden_states = encoder_outputs.last_hidden_state.mean(dim=1)
+                if encoder_hidden_states.shape[1] != 1:
+                    encoder_hidden_states = encoder_hidden_states.unsqueeze(0)
             encoder_attention_mask = torch.ones(src_attention_mask.shape[0], 1).to(src_attention_mask.device)
         else:
             encoder_hidden_states = encoder_outputs.last_hidden_state
