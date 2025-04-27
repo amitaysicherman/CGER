@@ -605,7 +605,8 @@ if __name__ == "__main__":
                                                                            gen_mol=args.gen_mol,
                                                                            train_encoder=args.train_encoder,
                                                                            is_text=args.level == "mf",
-                                                                           quantize=args.quantize)
+                                                                           quantize=args.quantize,
+                                                                           pretrained_encoder=args.pretrained_encoder)
     random_replace = None
     if args.random_tgt:
         vocab_siz = len(tgt_tokenizer) if args.random_tgt == 1 else args.random_tgt
