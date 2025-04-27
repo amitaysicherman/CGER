@@ -696,9 +696,9 @@ if __name__ == "__main__":
     print("Src model:")
     print(src_model)
     print("Number of parameters:", sum(p.numel() for p in src_model.parameters() if p.requires_grad))
-    print("Decoder model:")
-    print(decoder)
-    print("Number of parameters:", sum(p.numel() for p in decoder.parameters() if p.requires_grad))
+    print("model:")
+    print(model)
+    print("Number of parameters:", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
     if args.trie == 0:
