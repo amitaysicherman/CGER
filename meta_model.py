@@ -70,7 +70,7 @@ class Config:
 
 
 def save_or_load(model, LEVEL):
-    datasets = ["train", "valid", "test"]
+    datasets = ["valid", "test"]
     splits = ["pos", "neg"]
 
     logits_dir = "logits"
@@ -93,22 +93,13 @@ def save_or_load(model, LEVEL):
 
 @dataclass
 class Features:
-    probs_min: float
-    probs_max: float
-    probs_mean: float
-    probs_std: float
-    probs_rank_min: float
-    probs_rank_max: float
-    probs_rank_mean: float
-    probs_rank_std: float
-    prob_over_random_min: float
-    prob_over_random_max: float
-    prob_over_random_mean: float
-    prob_over_random_std: float
-    probs_to_next_largest_min: float
-    probs_to_next_largest_max: float
-    probs_to_next_largest_mean: float
-    probs_to_next_largest_std: float
+    log_prob: float
+    rank: float
+    prob_over_random: float
+    prob_to_next_largest: float
+    entropy: float
+    opt_count: float
+    index: int
 
 
 def features_list_to_dataframe(features_list):
@@ -128,33 +119,27 @@ def get_sample_features(logits, labels):
     :param logits:  shape (seq_len,vocab_size)
     :param labels:  shape (seq_len) labels is -100 for padding
     """
-    probs = []  # log probability of the correct label
-    probs_rank = []  # rank of the correct label
-    prob_over_random = []  # probability of the correct label over the random uniform distribution
-    probs_to_next_largest = []  # probability of the correct label over the next largest label
+    features_list = []
     for i in range(logits.shape[0]):
         if labels[i] == -100:
             continue
         logit = logits[i]
-        log_prob = F.log_softmax(torch.tensor(logit), dim=0)
-        prob = log_prob[labels[i]]
-        probs.append(prob.item())
-        probs_rank.append(torch.argsort(log_prob, descending=True).tolist().index(labels[i]))
-        non_zero_log_prob = (~torch.isclose(log_prob, torch.tensor(-1e6))).sum()
-        prob_over_random.append(prob.item() - (1 / non_zero_log_prob))
-        next_largest = torch.argsort(log_prob, descending=True)[1]
-        prob_to_next_largest = prob - log_prob[next_largest]
-        probs_to_next_largest.append(prob_to_next_largest.item())
-    probs = np.array(probs)
-    probs_rank = np.array(probs_rank)
-    prob_over_random = np.array(prob_over_random)
-    probs_to_next_largest = np.array(probs_to_next_largest)
-    features = Features(probs.min(), probs.max(), probs.mean(), probs.std(),
-                        probs_rank.min(), probs_rank.max(), probs_rank.mean(), probs_rank.std(),
-                        prob_over_random.min(), prob_over_random.max(), prob_over_random.mean(), prob_over_random.std(),
-                        probs_to_next_largest.min(), probs_to_next_largest.max(), probs_to_next_largest.mean(),
-                        probs_to_next_largest.std())
-    return features
+        log_probs = F.log_softmax(torch.tensor(logit), dim=0)
+        probs = F.softmax(torch.tensor(logit), dim=0)
+        non_zero_count = (~torch.isclose(log_probs, torch.tensor(-1e6))).sum()
+        features = Features(
+            log_prob=log_probs[labels[i]].item(),
+            rank=torch.argsort(log_probs, descending=True).tolist().index(labels[i]),
+            prob_over_random=log_probs[labels[i]].item() - (1 / non_zero_count),
+            prob_to_next_largest=log_probs[labels[i]].item() - log_probs[
+                torch.argsort(log_probs, descending=True)[1]].item(),
+            entropy=-torch.sum(probs * log_probs).item(),
+            opt_count=non_zero_count.item(),
+            index=i
+        )
+        features_list.append([features.log_prob, features.rank, features.prob_over_random,
+                              features.prob_to_next_largest, features.entropy, features.opt_count, features.index])
+    return features_list
 
 
 def data_split_to_features(logits, labels):
@@ -164,10 +149,12 @@ def data_split_to_features(logits, labels):
     :param labels:  shape (batch_size,seq_len) labels is -100 for padding
     """
     features = []
+    lens = []
     for i in range(logits.shape[0]):
         feature = get_sample_features(logits[i], labels[i])
-        features.append(feature)
-    return pd.DataFrame(features)
+        features.extend(feature)
+        lens.append(len(feature))
+    return np.array(features), np.array(lens)
 
 
 def main():
@@ -192,17 +179,406 @@ def main():
     reaction_model.to(device).eval()
     decoder.to(device).eval()
     model = get_model(decoder, trie, size, dropout, pooling, bottleneck_dim, learning_rate, mol, quantize=quantize,
-                      level=LEVEL)
+                      level=LEVEL, cold_fasta=cold_fasta, cold_smiles=cold_smiles)
     model.to(device).eval()
     data = save_or_load(model, LEVEL)
-    features = {"train": None, "valid": None, "test": None}
-    for split in ["train", "valid", "test"]:
+    features = {"valid": None, "test": None}
+    for split in [ "valid", "test"]:
         pos_logits = data[f"{split}_pos_logits"]
         pos_labels = data[f"{split}_pos_labels"]
         neg_logits = data[f"{split}_neg_logits"]
         neg_labels = data[f"{split}_neg_labels"]
-        pos_features = data_split_to_features(pos_logits, pos_labels)
-        neg_features = data_split_to_features(neg_logits, neg_labels)
-        pos_features["label"] = 1
-        neg_features["label"] = 0
-        features[split] = pd.concat([pos_features, neg_features], axis=0)
+        pos_features,pos_len = data_split_to_features(pos_logits, pos_labels)
+        neg_features,nen_len = data_split_to_features(neg_logits, neg_labels)
+        all_features = np.concatenate([pos_features, neg_features], axis=0)
+        all_len = np.concatenate([pos_len, nen_len], axis=0)
+        labels = np.concatenate([np.ones(len(pos_features)), np.zeros(len(neg_features))], axis=0)
+        features[split] = (all_features, all_len, labels)
+
+
+print("Preparing training and evaluation data...")
+valid_features, valid_lengths, valid_labels = features["valid"]
+test_features, test_lengths, test_labels = features["test"]
+
+# Create sequence level data with padding
+max_seq_length = max(np.max(valid_lengths), np.max(test_lengths))
+
+
+def prepare_sequence_data(features, lengths, labels):
+    """
+    Prepare sequence data by grouping features by their sequence and padding to max_seq_length
+    """
+    seq_features = []
+    seq_labels = []
+
+    # Group features by their sequence
+    start_idx = 0
+    for length in lengths:
+        if length == 0:
+            continue
+        # Extract features for this sequence
+        seq_feats = features[start_idx:start_idx + length]
+        # Pad to max_seq_length
+        padded_feats = np.zeros((max_seq_length, seq_feats.shape[1]))
+        padded_feats[:length] = seq_feats
+        seq_features.append(padded_feats)
+        start_idx += length
+
+    return np.array(seq_features), labels[:len(seq_features)]
+
+
+# Prepare sequence data for training and evaluation
+X_valid, y_valid = prepare_sequence_data(valid_features, valid_lengths, valid_labels)
+X_test, y_test = prepare_sequence_data(test_features, test_lengths, test_labels)
+
+print(f"Prepared data shapes - Valid: {X_valid.shape}, Test: {X_test.shape}")
+
+# Configure Transformer model with PyTorch
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import roc_auc_score, average_precision_score
+import os
+from datetime import datetime
+import csv
+import random
+
+# Set random seed base for reproducibility
+base_seed = 42
+np.random.seed(base_seed)
+random.seed(base_seed)
+torch.manual_seed(base_seed)
+
+
+# Define Transformer Encoder model
+class TransformerEncoder(nn.Module):
+    def __init__(self, input_dim, d_model=128, nhead=8, num_layers=3, dropout=0.1):
+        super().__init__()
+
+        # Input projection
+        self.input_projection = nn.Linear(input_dim, d_model)
+
+        # Positional encoding - learnable
+        self.pos_encoder = nn.Parameter(torch.zeros(1, max_seq_length, d_model))
+
+        # Transformer encoder layers
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model,
+            nhead=nhead,
+            dim_feedforward=d_model * 4,
+            dropout=dropout,
+            batch_first=True
+        )
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Sequence mask for padding (1 for tokens to attend to, 0 for padded positions)
+        self.register_buffer('sequence_mask', torch.ones(max_seq_length))
+
+        # Output classifier
+        self.classifier = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model // 2, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, lengths=None):
+        # x shape: [batch_size, seq_len, feature_dim]
+
+        # Create attention mask based on sequence lengths if provided
+        if lengths is not None:
+            mask = torch.zeros(x.size(0), x.size(1), device=x.device)
+            for i, length in enumerate(lengths):
+                mask[i, :length] = 1.0
+            mask = mask.bool()
+        else:
+            mask = None
+
+        # Project input features to model dimension
+        x = self.input_projection(x)
+
+        # Add positional encodings
+        x = x + self.pos_encoder[:, :x.size(1), :]
+
+        # Apply transformer encoder
+        encoded = self.transformer_encoder(x, src_key_padding_mask=~mask if mask is not None else None)
+
+        # Global average pooling over non-padded sequence elements
+        if mask is not None:
+            # Apply mask for accurate mean calculation
+            encoded = encoded * mask.unsqueeze(-1)
+            pooled = encoded.sum(dim=1) / mask.sum(dim=1, keepdim=True)
+        else:
+            pooled = encoded.mean(dim=1)
+
+        # Apply classifier
+        output = self.classifier(pooled)
+
+        return output.squeeze(-1)
+
+
+# Create data loaders
+def create_data_loader(features, labels, batch_size, shuffle=True):
+    features_tensor = torch.FloatTensor(features)
+    labels_tensor = torch.FloatTensor(labels)
+    dataset = TensorDataset(features_tensor, labels_tensor)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+
+
+# Training and evaluation functions
+def train_epoch(model, dataloader, criterion, optimizer):
+    model.train()
+    total_loss = 0
+    all_preds = []
+    all_labels = []
+
+    for inputs, labels in dataloader:
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        # Forward pass
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+
+        # Backward pass and optimize
+        loss.backward()
+        optimizer.step()
+
+        # Track metrics
+        total_loss += loss.item() * inputs.size(0)
+        all_preds.extend(outputs.detach().cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())
+
+    # Calculate metrics
+    epoch_loss = total_loss / len(dataloader.dataset)
+    auc = roc_auc_score(all_labels, all_preds)
+
+    return epoch_loss, auc
+
+
+def evaluate(model, dataloader, criterion):
+    model.eval()
+    total_loss = 0
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for inputs, labels in dataloader:
+            inputs, labels = inputs.to(device), labels.to(device)
+
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+
+            total_loss += loss.item() * inputs.size(0)
+            all_preds.extend(outputs.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+
+    # Calculate metrics
+    epoch_loss = total_loss / len(dataloader.dataset)
+    auc = roc_auc_score(all_labels, all_preds)
+    ap = average_precision_score(all_labels, all_preds)  # Average precision
+    return epoch_loss, auc, ap, all_preds, all_labels
+
+
+# Define a function for a single training run with specific hyperparameters
+def run_training(config, run_id, X_valid, y_valid, X_test, y_test):
+    # Set seed for reproducibility
+    run_seed = base_seed + run_id
+    torch.manual_seed(run_seed)
+    np.random.seed(run_seed)
+    random.seed(run_seed)
+
+    # Extract hyperparameters from config
+    d_model = config['d_model']
+    nhead = config['nhead']
+    num_layers = config['num_layers']
+    dropout = config['dropout']
+    batch_size = config['batch_size']
+    learning_rate = config['learning_rate']
+    weight_decay = config['weight_decay']
+    num_epochs = config['num_epochs']
+    patience = config['patience']
+
+    print(f"Run {run_id} - Config: d_model={d_model}, nhead={nhead}, num_layers={num_layers}, "
+          f"dropout={dropout:.2f}, lr={learning_rate:.2e}, weight_decay={weight_decay:.2e}")
+
+    # Create data loaders
+    valid_loader = create_data_loader(X_valid, y_valid, batch_size, shuffle=True)
+    test_loader = create_data_loader(X_test, y_test, batch_size, shuffle=False)
+
+    # Initialize model
+    input_dim = X_valid.shape[2]  # Feature dimension
+    model = TransformerEncoder(
+        input_dim=input_dim,
+        d_model=d_model,
+        nhead=nhead,
+        num_layers=num_layers,
+        dropout=dropout
+    )
+    model.to(device)
+
+    # Loss function and optimizer
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=0.1, total_iters=num_epochs)
+    # Train model
+    best_valid_auc = 0
+    best_model_state = None
+    no_improve = 0
+    best_epoch = 0
+
+    for epoch in range(num_epochs):
+        # Train
+        train_loss, train_auc = train_epoch(model, valid_loader, criterion, optimizer)
+
+        # Evaluate on test set (using as validation)
+        valid_loss, valid_auc, valid_ap, _, _ = evaluate(model, test_loader, criterion)
+
+        # Update learning rate based on validation AUC
+        scheduler.step(valid_auc)
+
+        # Save best model
+        if valid_auc > best_valid_auc:
+            best_valid_auc = valid_auc
+            best_model_state = model.state_dict().copy()
+            no_improve = 0
+            best_epoch = epoch
+        else:
+            no_improve += 1
+
+        # Print progress
+        if epoch % 20 == 0 or epoch == num_epochs - 1:
+            print(f"  Epoch {epoch + 1}/{num_epochs} | "
+                  f"Train Loss: {train_loss:.4f}, AUC: {train_auc:.4f} | "
+                  f"Valid Loss: {valid_loss:.4f}, AUC: {valid_auc:.4f}")
+
+        # Early stopping
+        if no_improve >= patience:
+            print(f"  Early stopping triggered after {epoch + 1} epochs")
+            break
+
+    # Load best model for final evaluation
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+
+    # Final evaluation on test set
+    test_loss, test_auc, test_ap, test_preds, test_labels = evaluate(model, test_loader, criterion)
+    print(f"  Run {run_id} Results | Test AUC: {test_auc:.4f}, AP: {test_ap:.4f}, Best Epoch: {best_epoch + 1}")
+
+    # Save model
+
+    # Return results
+    return {
+        'run_id': run_id,
+        'd_model': d_model,
+        'nhead': nhead,
+        'num_layers': num_layers,
+        'dropout': dropout,
+        'batch_size': batch_size,
+        'learning_rate': learning_rate,
+        'weight_decay': weight_decay,
+        'best_epoch': best_epoch + 1,  # 1-indexed for human readability
+        'test_loss': test_loss,
+        'test_auc': test_auc,
+        'test_ap': test_ap,
+    }
+
+
+# Define hyperparameter grid for random search
+param_grid = {
+    'd_model': [64, 128, 256, 512],
+    'nhead': [2, 4, 8],
+    'num_layers': [1, 2, 3, 4],
+    'dropout': [0.1, 0.2, 0.3, 0.4, 0.5],
+    'batch_size': [16, 32, 64],
+    'learning_rate': [1e-5, 5e-5, 1e-4, 5e-4, 1e-3],
+    'weight_decay': [0, 1e-6, 1e-5, 1e-4, 1e-3],
+    'num_epochs': [100],  # Fixed for all runs
+    'patience': [15]  # Fixed for all runs
+}
+
+# Set number of random configurations to try
+num_random_configs = 10_000
+
+
+# Generate random hyperparameter configurations
+def generate_random_configs(param_grid, num_configs):
+    configs = []
+
+    for i in range(num_configs):
+        config = {}
+        for param, values in param_grid.items():
+            config[param] = random.choice(values)
+
+        # Ensure nhead divides d_model
+        while config['d_model'] % config['nhead'] != 0:
+            config['nhead'] = random.choice([n for n in param_grid['nhead'] if config['d_model'] % n == 0])
+
+        configs.append(config)
+
+    return configs
+
+
+# Generate random configurations
+random_configs = generate_random_configs(param_grid, num_random_configs)
+
+# Create directory for results
+os.makedirs('results_meta', exist_ok=True)
+
+# Prepare CSV file for results
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+csv_filename = f'results/hyperparam_search_{timestamp}.csv'
+
+# Define CSV header
+csv_header = [
+    'run_id', 'd_model', 'nhead', 'num_layers', 'dropout',
+    'batch_size', 'learning_rate', 'weight_decay',
+    'best_epoch', 'test_loss', 'test_auc', 'test_ap'
+]
+
+# Create CSV file and write header
+with open(csv_filename, 'w', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=csv_header)
+    writer.writeheader()
+
+# Run random grid search
+all_results = []
+
+print(f"\nStarting Random Grid Search with {num_random_configs} configurations")
+print(f"Results will be saved to: {csv_filename}")
+
+for run_id, config in enumerate(random_configs):
+    print(f"\n=== Starting Run {run_id}/{num_random_configs} ===")
+    result = run_training(config, run_id, X_valid, y_valid, X_test, y_test)
+    all_results.append(result)
+
+    # Append result to CSV file
+    with open(csv_filename, 'a', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=csv_header)
+        writer.writerow(result)
+
+# Sort results by test AUC
+all_results.sort(key=lambda x: x['test_auc'], reverse=True)
+
+# Print top configurations
+print("\n=== Top 5 Configurations ===")
+for i in range(min(5, len(all_results))):
+    result = all_results[i]
+    print(f"Rank {i + 1} (Run {result['run_id']}) | "
+          f"Test AUC: {result['test_auc']:.4f}, AP: {result['test_ap']:.4f}")
+    print(f"  d_model={result['d_model']}, nhead={result['nhead']}, "
+          f"num_layers={result['num_layers']}, dropout={result['dropout']:.2f}, "
+          f"batch_size={result['batch_size']}, lr={result['learning_rate']:.2e}, "
+          f"weight_decay={result['weight_decay']:.2e}")
+
+# Save top configuration to a separate file
+best_result = all_results[0]
+with open(f'results/best_config_{timestamp}.csv', 'w', newline='') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=csv_header)
+    writer.writeheader()
+    writer.writerow(best_result)
+
+print(f"\nRandom Grid Search complete. Results saved to {csv_filename}")
+print(f"Best configuration saved to: results/best_config_{timestamp}.csv")

@@ -1,5 +1,5 @@
 import torch
-from transformers import BertGenerationDecoder, BertGenerationConfig, AutoTokenizer
+from transformers import BertGenerationDecoder, BertGenerationConfig, AutoTokenizer, BertGenerationEncoder
 from transformers import Trainer, TrainingArguments
 from torch.nn import functional as F
 from rxnfp.main import get_model_and_tokenizer
@@ -153,8 +153,30 @@ class RamdomReplace:
         return random_text
 
 
+def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads, intermediate_size, dropout):
+    encoder_config = BertGenerationConfig(
+        vocab_size=len(tgt_tokenizer.get_vocab()),
+        eos_token_id=tgt_tokenizer.eos_token_id,
+        pad_token_id=tgt_tokenizer.pad_token_id,
+        bos_token_id=tgt_tokenizer.bos_token_id,
+        decoder_start_token_id=tgt_tokenizer.pad_token_id,
+        is_encoder_decoder=True,
+        is_decoder=True,
+        add_cross_attention=True,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=num_attention_heads,
+        intermediate_size=intermediate_size,
+        hidden_dropout_prob=dropout,
+        attention_probs_dropout_prob=dropout,
+        max_position_embeddings=512,
+    )
+    encoder = BertGenerationDecoder(encoder_config)
+    return encoder
+
+
 def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False,
-                        is_text=False, quantize=0):
+                        is_text=False, quantize=0, pretrained_encoder=1):
     if is_text:
         src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
@@ -176,8 +198,17 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=F
         tgt_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
     if quantize:
         tgt_tokenizer = QuantizeTokenizer()
-    src_model.to(device)
 
+    hidden_size = hidden_size_per_size[decoder_size]
+    num_hidden_layers = num_layers_per_size[decoder_size]
+    num_attention_heads = num_attention_heads_per_size[decoder_size]
+    intermediate_size = hidden_size * 4
+
+    if not pretrained_encoder:
+        src_model = get_bert_encoder(src_tokenizer, hidden_size, num_hidden_layers, num_attention_heads,
+                                     intermediate_size, dropout)
+
+    src_model.to(device)
     # Set model state based on train_encoder flag
     if train_encoder:
         src_model.train()
@@ -187,11 +218,6 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=F
         src_model.eval()
         for param in src_model.parameters():
             param.requires_grad = False
-
-    hidden_size = hidden_size_per_size[decoder_size]
-    num_hidden_layers = num_layers_per_size[decoder_size]
-    num_attention_heads = num_attention_heads_per_size[decoder_size]
-    intermediate_size = hidden_size * 4
 
     # Load the pretrained decoder
     decoder_config = BertGenerationConfig(
@@ -213,6 +239,7 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=F
     )
     decoder = BertGenerationDecoder(decoder_config)
     decoder.train().to(device)
+
     return src_model, src_tokenizer, decoder, tgt_tokenizer
 
 
@@ -400,7 +427,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
             path_weights = path_weights[:, 1:]
             path_weights = (trie.total_paths * path_weights + 1).log()
             path_weights = path_weights / path_weights.sum(dim=-1, keepdim=True)
-            path_weights= 1 - path_weights
+            path_weights = 1 - path_weights
 
             path_weights = path_weights.to(decoder_outputs.logits.device)
             path_weights = path_weights.view(-1)
@@ -561,9 +588,11 @@ if __name__ == "__main__":
     parser.add_argument("--random_tgt", type=int, default=0)
     parser.add_argument("--train_encoder", type=int, default=0,
                         help="Whether to train the encoder (1) or freeze it (0)")
+    parser.add_argument("--pretrained_encoder", type=int, default=1)
     parser.add_argument("--quantize", type=int, default=1)
     parser.add_argument("--entropy_normalize", type=int, default=0)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
+
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
@@ -685,6 +714,8 @@ if __name__ == "__main__":
         output_dir += "_entropy"
     if args.path_weights_normalize:
         output_dir += "_pathinv"
+    if not args.pretrained_encoder:
+        output_dir += "_noenc"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
