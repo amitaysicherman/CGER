@@ -171,7 +171,7 @@ def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_he
         attention_probs_dropout_prob=dropout,
         max_position_embeddings=512,
     )
-    encoder = BertGenerationDecoder(encoder_config)
+    encoder = BertGenerationEncoder(encoder_config)
     return encoder
 
 
