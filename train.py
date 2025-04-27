@@ -153,7 +153,7 @@ class RamdomReplace:
         return random_text
 
 
-def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads, intermediate_size, dropout):
+def get_bert_encoder(tokenizer, num_hidden_layers, num_attention_heads, dropout, encoder_dim):
     encoder_config = BertGenerationConfig(
         vocab_size=len(tokenizer.get_vocab()),
         eos_token_id=tokenizer.eos_token_id,
@@ -163,10 +163,10 @@ def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_he
         is_encoder_decoder=True,
         is_decoder=False,
         add_cross_attention=False,
-        hidden_size=hidden_size,
+        hidden_size=encoder_dim,
         num_hidden_layers=num_hidden_layers,
         num_attention_heads=num_attention_heads,
-        intermediate_size=intermediate_size,
+        intermediate_size=encoder_dim * 4,
         hidden_dropout_prob=dropout,
         attention_probs_dropout_prob=dropout,
         max_position_embeddings=512,
@@ -176,7 +176,7 @@ def get_bert_encoder(tokenizer, hidden_size, num_hidden_layers, num_attention_he
 
 
 def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=False, train_encoder=False,
-                        is_text=False, quantize=0, pretrained_encoder=1):
+                        is_text=False, quantize=0, pretrained_encoder=1, encoder_dim=ENCODER_DIM):
     if is_text:
         src_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
         src_model = AutoModel.from_pretrained("facebook/esm2_t33_650M_UR50D")
@@ -205,8 +205,8 @@ def get_encoder_decoder(decoder_size="l", dropout=0.2, drugbank=False, gen_mol=F
     intermediate_size = hidden_size * 4
 
     if not pretrained_encoder:
-        src_model = get_bert_encoder(src_tokenizer, hidden_size, num_hidden_layers, num_attention_heads,
-                                     intermediate_size, dropout)
+        src_model = get_bert_encoder(src_tokenizer, num_hidden_layers, num_attention_heads, dropout,
+                                     encoder_dim=encoder_dim)
 
     src_model.to(device)
     # Set model state based on train_encoder flag
@@ -599,6 +599,14 @@ if __name__ == "__main__":
                                                                                 cold_smiles=args.cold_smiles,
                                                                                 cold_fasta=args.cold_fasta,
                                                                                 quantize=args.quantize)
+    encoder_dim = ENCODER_DIM
+    if args.level == "mf":
+        encoder_dim = 1280
+    elif args.level != "easy":
+        encoder_dim = 768
+    if args.gen_mol:
+        encoder_dim = 1280
+
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level != "easy",
@@ -606,7 +614,8 @@ if __name__ == "__main__":
                                                                            train_encoder=args.train_encoder,
                                                                            is_text=args.level == "mf",
                                                                            quantize=args.quantize,
-                                                                           pretrained_encoder=args.pretrained_encoder)
+                                                                           pretrained_encoder=args.pretrained_encoder,
+                                                                           encoder_dim=encoder_dim)
     random_replace = None
     if args.random_tgt:
         vocab_siz = len(tgt_tokenizer) if args.random_tgt == 1 else args.random_tgt
@@ -640,13 +649,6 @@ if __name__ == "__main__":
         trie = build_trie(list(set(tgt_train + tgt_test)), tgt_tokenizer)
     else:
         trie = None
-    encoder_dim = ENCODER_DIM
-    if args.level == "mf":
-        encoder_dim = 1280
-    elif args.level != "easy":
-        encoder_dim = 768
-    if args.gen_mol:
-        encoder_dim = 1280
 
     # Choose the appropriate model based on whether we're training the encoder
     if args.train_encoder:
@@ -691,7 +693,6 @@ if __name__ == "__main__":
         compute_metrics_func = lambda x: compute_metrics(x)
         eval_dataset = {"test": test_dataset, "train": train_small_dataset, "valid": valid_dataset}
         metric_for_best_model = "eval_test_token_accuracy"
-
 
     print(f"Training with {args.level} level")
     print("Src model:")
