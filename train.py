@@ -691,6 +691,15 @@ if __name__ == "__main__":
         eval_dataset = {"test": test_dataset, "train": train_small_dataset, "valid": valid_dataset}
         metric_for_best_model = "eval_test_token_accuracy"
 
+
+    print(f"Training with {args.level} level")
+    print("Src model:")
+    print(src_model)
+    print("Number of parameters:", sum(p.numel() for p in src_model.parameters() if p.requires_grad))
+    print("Decoder model:")
+    print(decoder)
+    print("Number of parameters:", sum(p.numel() for p in decoder.parameters() if p.requires_grad))
+
     output_dir = f"results/{args.level}_{args.size}_{args.dropout}_{args.learning_rate}"
     if args.trie == 0:
         output_dir += "_notrie"

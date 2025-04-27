@@ -4,16 +4,25 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=0-2
+#SBATCH --array=0-12
 
 level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
-"python train.py --path_weights_normalize 1 --dropout 0.2 --level biosnap --quantize 1"
-"python train.py --entropy_normalize 1 --dropout 0.2  --level biosnap"
-"python train.py --entropy_normalize 1 --path_weights_normalize 1 --dropout 0.2  --level biosnap"
+"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
 )
 
 # Get the config for the current index
