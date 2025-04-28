@@ -579,7 +579,7 @@ if __name__ == "__main__":
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--report_to", type=str, default="tensorboard")
     parser.add_argument("--size", type=str, default="l")
-    parser.add_argument("--level", type=str, default="drugbank")
+    parser.add_argument("--level", type=str, default="biosnap")
     parser.add_argument("--dropout", type=float, default=0.0)
     parser.add_argument("--trie", type=int, default=1)
     parser.add_argument("--bottleneck_dim", type=int, default=128)
