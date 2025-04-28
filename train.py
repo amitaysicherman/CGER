@@ -621,7 +621,7 @@ if __name__ == "__main__":
                                                                            encoder_dim=encoder_dim)
     if args.auto_pretrained:
         from train_auto import get_auto_prep
-        src_model = get_auto_prep(is_mol=not args.gen_mol)
+        src_model = get_auto_prep(is_mol=args.gen_mol==0)
         src_model.to(device)
         src_model.eval()
         for param in src_model.parameters():
