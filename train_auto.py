@@ -1,10 +1,44 @@
 from transformers import BertGenerationConfig, BertGenerationDecoder, BertGenerationEncoder
-from transformers import AutoTokenizer
 import torch
 from transformers import TrainingArguments, Trainer
 import numpy as np
 
+
+import torch
+import os
+from transformers import AutoTokenizer
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_best_cp(base_path):
+    all_cp_dirs = [os.path.join(base_path, d) for d in os.listdir(base_path) if
+                   os.path.isdir(os.path.join(base_path, d)) and d.startswith("checkpoint")]
+    all_cp_dirs.sort(key=lambda x: int(x.split("-")[-1]))
+    last_cp_dir = all_cp_dirs[-1]
+    import json
+    with open(os.path.join(last_cp_dir, "trainer_state.json"), "r") as f:
+        trainer_state = json.load(f)
+    best_cp_dir = trainer_state["best_model_checkpoint"]
+    model_path = f"{best_cp_dir}/pytorch_model.bin"
+    return model_path
+
+
+def get_auto_prep(hidden_size=512, num_hidden_layers=4, num_attention_heads=4, intermediate_size=1024,
+                  dropout=0.1, is_mol=False):
+    if is_mol:
+        tokenizer = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+    else:
+        tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
+
+    encoder, _ = get_encoder_decoder_decoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads,
+                                             intermediate_size, dropout)
+    if is_mol:
+        base_dir = "prep_mol"
+    else:
+        base_dir = "prep_prot"
+    cp = get_best_cp(base_dir)
+    encoder.load_state_dict(torch.load(cp, map_location="cpu"), strict=False)
+    return encoder
 
 
 class AutoDataset(torch.utils.data.Dataset):

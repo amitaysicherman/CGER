@@ -594,6 +594,7 @@ if __name__ == "__main__":
     parser.add_argument("--quantize", type=int, default=1)
     parser.add_argument("--entropy_normalize", type=int, default=0)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
+    parser.add_argument("--auto_pretrained", type=int, default=0)
 
     args = parser.parse_args()
 
@@ -618,6 +619,14 @@ if __name__ == "__main__":
                                                                            quantize=args.quantize,
                                                                            pretrained_encoder=args.pretrained_encoder,
                                                                            encoder_dim=encoder_dim)
+    if args.auto_pretrained:
+        from train_auto import get_auto_prep
+        src_model = get_auto_prep(is_mol=args.gen_mol)
+        src_model.to(device)
+        src_model.eval()
+        for param in src_model.parameters():
+            param.requires_grad = False
+
     random_replace = None
     if args.random_tgt:
         vocab_siz = len(tgt_tokenizer) if args.random_tgt == 1 else args.random_tgt
