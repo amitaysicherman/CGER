@@ -11,7 +11,7 @@ class AutoDataset(torch.utils.data.Dataset):
     def __init__(self, input_file="data/biosnap/train_enzyme.txt", tokenizer="facebook/esm2_t33_650M_UR50D"):
         with open(input_file, "r") as f:
             self.sequences = list(set(f.read().splitlines()))
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer,trust_remote_code=True)
 
     def __len__(self):
         return len(self.sequences)
@@ -200,7 +200,7 @@ if __name__ == "__main__":
 
     tokenizer_file = args.tokenizer_file
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_file)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_file,trust_remote_code=True)
     if args.eval_file:
         train_dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
         eval_dataset = AutoDataset(input_file=args.eval_file, tokenizer=tokenizer_file)
