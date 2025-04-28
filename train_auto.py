@@ -131,9 +131,12 @@ def compute_metrics(eval_preds):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="Train a model with a trie.")
     parser.add_argument("--input_file", type=str, default="data/biosnap/train_enzyme.txt",
                         help="Path to the input file containing sequences.")
+    parser.add_argument("--eval_file", type=str, default="",
+                        help="Path to the evaluation file containing sequences.")
     parser.add_argument("--output_dir", type=str, default="./finetuned_mlm",
                         help="Directory to save the fine-tuned model.")
     parser.add_argument("--hidden_size", type=int, default=256,
@@ -170,6 +173,7 @@ if __name__ == "__main__":
                         help="Total limit of checkpoints to save.")
     parser.add_argument("--auto_find_batch_size", type=bool, default=True,
                         help="Whether to automatically find the batch size.")
+    parser.add_argument("--tokenizer_file", type=str, default="facebook/esm2_t33_650M_UR50D", )
     args = parser.parse_args()
     output_dir = args.output_dir
     input_file = args.input_file
@@ -194,22 +198,21 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-
-
-
-
-    tokenizer_file = "facebook/esm2_t33_650M_UR50D"
+    tokenizer_file = args.tokenizer_file
 
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_file)
-    dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
-    train_dataset, eval_dataset = torch.utils.data.random_split(dataset,
-                                                                [int(0.9 * len(dataset)), int(0.1 * len(dataset))])
-
+    if args.eval_file:
+        train_dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
+        eval_dataset = AutoDataset(input_file=args.eval_file, tokenizer=tokenizer_file)
+    else:
+        dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
+        train_size, eval_size = int(0.9 * len(dataset)), int(0.1 * len(dataset))
+        train_dataset, eval_dataset = torch.utils.data.random_split(dataset, [train_size, eval_size])
     subset_indices = np.random.choice(len(train_dataset), size=len(eval_dataset), replace=False)
-    train_small_subset = torch.utils.data.Subset(dataset, subset_indices)
+    train_small_subset = torch.utils.data.Subset(train_dataset, subset_indices)
     from trie import build_trie
 
-    trie = build_trie(dataset.sequences, tokenizer)
+    trie = build_trie(list(set(train_dataset.sequences + eval_dataset.sequences)), tokenizer)
     encoder, decoder = get_encoder_decoder_decoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads,
                                                    intermediate_size, dropout)
     model = EncoderDecoder(encoder, decoder, trie).to(device)

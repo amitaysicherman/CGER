@@ -10,21 +10,23 @@ level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
+#configs=(
+#"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
+#"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+#)
 configs=(
-"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
+"python train_auto.py "
 )
-
 # Get the config for the current index
 config=${configs[$split_index]}
 # Print the config to be used
