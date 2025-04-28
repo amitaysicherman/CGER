@@ -206,7 +206,7 @@ if __name__ == "__main__":
         eval_dataset = AutoDataset(input_file=args.eval_file, tokenizer=tokenizer_file)
     else:
         dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
-        train_size, eval_size = int(0.9 * len(dataset)), int(0.1 * len(dataset))
+        train_size, eval_size = int(0.9 * len(dataset)),len(dataset) - int(0.9 * len(dataset))
         train_dataset, eval_dataset = torch.utils.data.random_split(dataset, [train_size, eval_size])
     subset_indices = np.random.choice(len(train_dataset), size=len(eval_dataset), replace=False)
     train_small_subset = torch.utils.data.Subset(train_dataset, subset_indices)
