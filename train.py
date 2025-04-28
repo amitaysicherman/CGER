@@ -609,7 +609,8 @@ if __name__ == "__main__":
         encoder_dim = 768
     if args.gen_mol:
         encoder_dim = 1280
-
+    if args.auto_pretrained:
+        encoder_dim = 512
     src_model, src_tokenizer, decoder, tgt_tokenizer = get_encoder_decoder(decoder_size=args.size,
                                                                            dropout=args.dropout,
                                                                            drugbank=args.level != "easy",
@@ -738,6 +739,8 @@ if __name__ == "__main__":
         output_dir += "_pathinv"
     if not args.pretrained_encoder:
         output_dir += "_noenc"
+    if args.auto_pretrained:
+        output_dir += "_autoenc"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
