@@ -204,15 +204,17 @@ if __name__ == "__main__":
     if args.eval_file:
         train_dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
         eval_dataset = AutoDataset(input_file=args.eval_file, tokenizer=tokenizer_file)
+        sequences = list(set(train_dataset.sequences + eval_dataset.sequences))
     else:
         dataset = AutoDataset(input_file=input_file, tokenizer=tokenizer_file)
+        sequences = list(set(dataset.sequences))
         train_size, eval_size = int(0.9 * len(dataset)),len(dataset) - int(0.9 * len(dataset))
         train_dataset, eval_dataset = torch.utils.data.random_split(dataset, [train_size, eval_size])
     subset_indices = np.random.choice(len(train_dataset), size=len(eval_dataset), replace=False)
     train_small_subset = torch.utils.data.Subset(train_dataset, subset_indices)
     from trie import build_trie
 
-    trie = build_trie(list(set(train_dataset.sequences + eval_dataset.sequences)), tokenizer)
+    trie = build_trie(sequences, tokenizer)
     encoder, decoder = get_encoder_decoder_decoder(tokenizer, hidden_size, num_hidden_layers, num_attention_heads,
                                                    intermediate_size, dropout)
     model = EncoderDecoder(encoder, decoder, trie).to(device)
