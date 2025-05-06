@@ -10,6 +10,7 @@ import os
 
 sns.set(style="whitegrid")
 import argparse
+
 parser = argparse.ArgumentParser(description="Analyze Trie Data")
 parser.add_argument("--quantize", action="store_true", help="Use quantized tokenizer")
 parser.add_argument("--dataset", type=str, default="biosnap", help="Dataset to analyze")
@@ -100,69 +101,72 @@ results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=Fal
 
 # Create and save figures
 data_types = ['molecules', 'proteins']
+plt.figure(figsize=(10, 3))  # Increased height to make room for labels
 
-# Figure 1: Sequence Length Distribution
-plt.figure(figsize=(10, 4))
-for i, data_type in enumerate(data_types):
-    plt.subplot(1, 2, i + 1)
-    plt.hist(results[data_type]['length'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Sequences")
-    plt.xlabel("Sequence Length (tokens)")
-    plt.ylabel("Count")
-    plt.title(f"{data_type.capitalize()} Sequence Length Distribution")
-    # plt.legend()
-plt.tight_layout()
-plt.savefig(f"figures/{dataset}_{quantize}_sequence_length_distribution.png")
-plt.close()
+# Create subplots with minimal spacing but enough room for labels
+gs = plt.GridSpec(1, 4, wspace=0.1, hspace=0.3)
 
-# Figure 2: Active Sequence Length
-plt.figure(figsize=(10, 4))
-for i, data_type in enumerate(data_types):
-    plt.subplot(1, 2, i + 1)
-    plt.hist(results[data_type]['active_length'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Active Length")
-    plt.xlabel("Active Sequence Length")
-    plt.ylabel("Count")
-    plt.title(f"{data_type.capitalize()} Active Sequence Length Distribution")
-    # plt.legend()
-plt.tight_layout()
-plt.savefig(f"figures/{dataset}_{quantize}_active_sequence_length.png")
-plt.close()
+# Find the maximum density value across all histograms to set consistent y-axis limits
+max_density = 0
+for data_type in data_types:
+    # Calculate histogram values for active_length
+    counts_length, _ = np.histogram(results[data_type]['active_length'], density=True)
+    counts_levels, _ = np.histogram(results[data_type]['active_levels'], density=True)
+    max_density = max(max_density, np.max(counts_length), np.max(counts_levels))
 
-# Figure 3: Active Tokens Candidate Width
-plt.figure(figsize=(10, 4))
-for i, data_type in enumerate(data_types):
-    plt.subplot(1, 2, i + 1)
-    plt.hist(results[data_type]['active_levels'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Active Width")
-    plt.xlabel("Active Tokens Candidate Width")
-    plt.ylabel("Count")
-    plt.title(f"{data_type.capitalize()} Active Tokens Width Distribution")
-    # plt.legend()
-plt.tight_layout()
-plt.savefig(f"figures/{dataset}_{quantize}_active_tokens_width.png")
-plt.close()
+# First subplot (active_length - data_type 0)
+ax1 = plt.subplot(gs[0])
+ax1.hist(results[data_types[0]]['active_length'],
+        density=True,
+        label=f"{data_types[0].capitalize()}",
+        color="tab:blue")
+ax1.set_ylabel("Percentage")
+ax1.set_title(f"{data_types[0].capitalize()}")
+ax1.legend(loc="upper left")
+ax1.set_ylim(0, max_density * 1.1)  # Set y-limit with some margin
+ax1.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0, decimals=0))
 
-# Figure 4: Top Token Distribution
-plt.figure(figsize=(10, 4))
-for i, data_type in enumerate(data_types):
-    plt.subplot(2, 1, i + 1)
-    top_tokens = results[data_type]['top_tokens']
-    token_ids = [str(t[0]) for t in top_tokens[:20]]  # Convert token IDs to strings for display
-    token_counts = [t[1] for t in top_tokens[:20]]
+# Second subplot (active_length - data_type 1)
+ax2 = plt.subplot(gs[1], sharey=ax1)
+ax2.hist(results[data_types[1]]['active_length'],
+        density=True,
+        label=f"{data_types[1].capitalize()}",
+        color="tab:blue")
+ax2.set_title(f"{data_types[1].capitalize()}")
+ax2.legend(loc="upper left")
+plt.setp(ax2.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
-    # Create horizontal bar chart
-    bars = plt.barh(range(len(token_ids)), token_counts, align='center', alpha=0.7)
-    plt.yticks(range(len(token_ids)), token_ids)
-    plt.xlabel('Count')
-    plt.ylabel('Token ID')
-    plt.title(f"Top 20 Tokens in {data_type.capitalize()} Sequences")
+# Third subplot (active_levels - data_type 0)
+ax3 = plt.subplot(gs[2], sharey=ax1)  # Share y-axis with the first plot
+ax3.hist(results[data_types[0]]['active_levels'],
+        density=True,
+        label=f"{data_types[0].capitalize()}",
+        color="tab:orange")
+# ax3.set_ylabel("Percentage")
+ax3.set_title(f"{data_types[0].capitalize()}")
+ax3.legend(loc="upper left")
+ax3.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0, decimals=0))
+plt.setp(ax3.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
-    # Add count labels to the bars
-    for bar in bars:
-        width = bar.get_width()
-        plt.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f'{int(width)}',
-                 ha='left', va='center')
+# Fourth subplot (active_levels - data_type 1)
+ax4 = plt.subplot(gs[3], sharey=ax1)  # Share y-axis with the first plot
+ax4.hist(results[data_types[1]]['active_levels'],
+        density=True,
+        label=f"{data_types[1].capitalize()}",
+        color="tab:orange")
+ax4.set_title(f"{data_types[1].capitalize()}")
+ax4.legend(loc="upper left")
+plt.setp(ax4.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
-plt.tight_layout()
-plt.savefig(f"figures/{dataset}_{quantize}_top_token_distribution.png")
-plt.close()
+# Add x-axis labels directly to the subplots instead of using fig.text
+ax1.set_xlabel("Active Sequence Length")
+ax2.set_xlabel("Active Sequence Length")
+ax3.set_xlabel("Mean Branching Factor")
+ax4.set_xlabel("Mean Branching Factor")
+
+# Adjust layout without using tight_layout
+plt.subplots_adjust(bottom=0.15, top=0.9, left=0.1, right=0.95, wspace=0.1)
+# plt.savefig(f"figures/{dataset}_{quantize}_quantitative.png")
+# plt.close()
 
 print("Analysis complete. All figures saved to the 'figures' directory.")
