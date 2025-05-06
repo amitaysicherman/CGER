@@ -9,8 +9,8 @@ import seaborn as sns
 import os
 
 sns.set(style="whitegrid")
-quantize=True
-dataset="biosnap"
+quantize = True
+dataset = "biosnap"
 
 # Create figures directory if it doesn't exist
 os.makedirs("figures", exist_ok=True)
@@ -72,6 +72,11 @@ src_train_mol, tgt_train_mol, src_valid_mol, tgt_valid_mol, src_test_mol, tgt_te
                                                                                                     quantize=quantize)
 inputs_mol = list(set(tgt_train_mol))
 tokenizer_mol = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
+if quantize:
+    from train import QuantizeTokenizer
+
+    tokenizer_mol = QuantizeTokenizer()
+
 results['molecules'] = analyze_data(inputs_mol, tokenizer_mol, is_molecules=True)
 
 # Analyze proteins
@@ -81,13 +86,12 @@ src_train_prot, tgt_train_prot, src_valid_prot, tgt_valid_prot, src_test_prot, t
     level=dataset, gen_mol=molecules, quantize=quantize)
 inputs_prot = list(set(tgt_train_prot))
 tokenizer_prot = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
-results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=False)
-
 if quantize:
     from train import QuantizeTokenizer
-    tokenizer_mol = QuantizeTokenizer()
+
     tokenizer_prot = QuantizeTokenizer()
 
+results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=False)
 
 # Create and save figures
 data_types = ['molecules', 'proteins']
