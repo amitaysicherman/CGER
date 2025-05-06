@@ -9,6 +9,8 @@ import seaborn as sns
 import os
 
 sns.set(style="whitegrid")
+quantize=True
+dataset="biosnap"
 
 # Create figures directory if it doesn't exist
 os.makedirs("figures", exist_ok=True)
@@ -65,8 +67,9 @@ results = {}
 # Analyze molecules
 molecules = True
 print("Analyzing molecules...")
-src_train_mol, tgt_train_mol, src_valid_mol, tgt_valid_mol, src_test_mol, tgt_test_mol = load_files(level="drugbank",
-                                                                                                    gen_mol=molecules)
+src_train_mol, tgt_train_mol, src_valid_mol, tgt_valid_mol, src_test_mol, tgt_test_mol = load_files(level=dataset,
+                                                                                                    gen_mol=molecules,
+                                                                                                    quantize=quantize)
 inputs_mol = list(set(tgt_train_mol))
 tokenizer_mol = AutoTokenizer.from_pretrained("ibm/MoLFormer-XL-both-10pct", trust_remote_code=True)
 results['molecules'] = analyze_data(inputs_mol, tokenizer_mol, is_molecules=True)
@@ -75,10 +78,16 @@ results['molecules'] = analyze_data(inputs_mol, tokenizer_mol, is_molecules=True
 molecules = False
 print("Analyzing proteins...")
 src_train_prot, tgt_train_prot, src_valid_prot, tgt_valid_prot, src_test_prot, tgt_test_prot = load_files(
-    level="drugbank", gen_mol=molecules)
+    level=dataset, gen_mol=molecules, quantize=quantize)
 inputs_prot = list(set(tgt_train_prot))
 tokenizer_prot = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D", trust_remote_code=True)
 results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=False)
+
+if quantize:
+    from train import QuantizeTokenizer
+    tokenizer_mol = QuantizeTokenizer()
+    tokenizer_prot = QuantizeTokenizer()
+
 
 # Create and save figures
 data_types = ['molecules', 'proteins']
@@ -93,7 +102,7 @@ for i, data_type in enumerate(data_types):
     plt.title(f"{data_type.capitalize()} Sequence Length Distribution")
     plt.legend()
 plt.tight_layout()
-plt.savefig("figures/sequence_length_distribution.png")
+plt.savefig(f"figures/{dataset}_{quantize}_sequence_length_distribution.png")
 plt.close()
 
 # Figure 2: Active Sequence Length
@@ -106,7 +115,7 @@ for i, data_type in enumerate(data_types):
     plt.title(f"{data_type.capitalize()} Active Sequence Length Distribution")
     plt.legend()
 plt.tight_layout()
-plt.savefig("figures/active_sequence_length.png")
+plt.savefig(f"figures/{dataset}_{quantize}_active_sequence_length.png")
 plt.close()
 
 # Figure 3: Active Tokens Candidate Width
@@ -119,7 +128,7 @@ for i, data_type in enumerate(data_types):
     plt.title(f"{data_type.capitalize()} Active Tokens Width Distribution")
     plt.legend()
 plt.tight_layout()
-plt.savefig("figures/active_tokens_width.png")
+plt.savefig(f"figures/{dataset}_{quantize}_active_tokens_width.png")
 plt.close()
 
 # Figure 4: Top Token Distribution
@@ -144,7 +153,7 @@ for i, data_type in enumerate(data_types):
                  ha='left', va='center')
 
 plt.tight_layout()
-plt.savefig("figures/top_token_distribution.png")
+plt.savefig(f"figures/{dataset}_{quantize}_top_token_distribution.png")
 plt.close()
 
 print("Analysis complete. All figures saved to the 'figures' directory.")
