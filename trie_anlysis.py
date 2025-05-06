@@ -101,6 +101,8 @@ results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=Fal
 
 # Create and save figures
 data_types = ['molecules', 'proteins']
+
+
 plt.figure(figsize=(10, 3))  # Increased height to make room for labels
 
 # Create subplots with minimal spacing but enough room for labels
@@ -160,13 +162,19 @@ plt.setp(ax4.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
 # Add x-axis labels directly to the subplots instead of using fig.text
 ax1.set_xlabel("Active Sequence Length")
-ax2.set_xlabel("Active Sequence Length")
+# ax2.set_xlabel("Active Sequence Length")
 ax3.set_xlabel("Mean Branching Factor")
-ax4.set_xlabel("Mean Branching Factor")
+# ax4.set_xlabel("Mean Branching Factor")
+
+# set y limit for all subplots
+for ax in [ax1, ax2, ax3, ax4]:
+    ax.set_ylim(0, 0.4)  # Set y-limit with some margin
+
+
 
 # Adjust layout without using tight_layout
 plt.subplots_adjust(bottom=0.15, top=0.9, left=0.1, right=0.95, wspace=0.1)
-# plt.savefig(f"figures/{dataset}_{quantize}_quantitative.png")
-# plt.close()
+plt.savefig(f"figures/{dataset}_{quantize}_quantitative.png")
+plt.close()
 
 print("Analysis complete. All figures saved to the 'figures' directory.")
