@@ -174,7 +174,7 @@ for ax in [ax1, ax2, ax3, ax4]:
 
 # Adjust layout without using tight_layout
 plt.subplots_adjust(bottom=0.15, top=0.9, left=0.1, right=0.95, wspace=0.1)
-plt.savefig(f"figures/{dataset}_{quantize}_quantitative.png")
+plt.savefig(f"figures/{dataset}_{quantize}_quantitative.png", dpi=300, bbox_inches="tight")
 plt.close()
 
 print("Analysis complete. All figures saved to the 'figures' directory.")
