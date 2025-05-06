@@ -9,8 +9,13 @@ import seaborn as sns
 import os
 
 sns.set(style="whitegrid")
-quantize = True
-dataset = "biosnap"
+import argparse
+parser = argparse.ArgumentParser(description="Analyze Trie Data")
+parser.add_argument("--quantize", action="store_true", help="Use quantized tokenizer")
+parser.add_argument("--dataset", type=str, default="biosnap", help="Dataset to analyze")
+args = parser.parse_args()
+quantize = args.quantize
+dataset = args.dataset
 
 # Create figures directory if it doesn't exist
 os.makedirs("figures", exist_ok=True)
@@ -97,46 +102,46 @@ results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=Fal
 data_types = ['molecules', 'proteins']
 
 # Figure 1: Sequence Length Distribution
-plt.figure(figsize=(12, 5))
+plt.figure(figsize=(10, 4))
 for i, data_type in enumerate(data_types):
     plt.subplot(1, 2, i + 1)
     plt.hist(results[data_type]['length'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Sequences")
     plt.xlabel("Sequence Length (tokens)")
     plt.ylabel("Count")
     plt.title(f"{data_type.capitalize()} Sequence Length Distribution")
-    plt.legend()
+    # plt.legend()
 plt.tight_layout()
 plt.savefig(f"figures/{dataset}_{quantize}_sequence_length_distribution.png")
 plt.close()
 
 # Figure 2: Active Sequence Length
-plt.figure(figsize=(12, 5))
+plt.figure(figsize=(10, 4))
 for i, data_type in enumerate(data_types):
     plt.subplot(1, 2, i + 1)
     plt.hist(results[data_type]['active_length'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Active Length")
     plt.xlabel("Active Sequence Length")
     plt.ylabel("Count")
     plt.title(f"{data_type.capitalize()} Active Sequence Length Distribution")
-    plt.legend()
+    # plt.legend()
 plt.tight_layout()
 plt.savefig(f"figures/{dataset}_{quantize}_active_sequence_length.png")
 plt.close()
 
 # Figure 3: Active Tokens Candidate Width
-plt.figure(figsize=(12, 5))
+plt.figure(figsize=(10, 4))
 for i, data_type in enumerate(data_types):
     plt.subplot(1, 2, i + 1)
     plt.hist(results[data_type]['active_levels'], bins=10, alpha=0.7, label=f"{data_type.capitalize()} Active Width")
     plt.xlabel("Active Tokens Candidate Width")
     plt.ylabel("Count")
     plt.title(f"{data_type.capitalize()} Active Tokens Width Distribution")
-    plt.legend()
+    # plt.legend()
 plt.tight_layout()
 plt.savefig(f"figures/{dataset}_{quantize}_active_tokens_width.png")
 plt.close()
 
 # Figure 4: Top Token Distribution
-plt.figure(figsize=(12, 10))
+plt.figure(figsize=(10, 4))
 for i, data_type in enumerate(data_types):
     plt.subplot(2, 1, i + 1)
     top_tokens = results[data_type]['top_tokens']
