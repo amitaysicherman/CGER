@@ -10,25 +10,31 @@ level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
-#configs=(
-#"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size s --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#"python train.py --size m --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#"python train.py --size l --bottleneck_dim 0 --pooling 0 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 0 --level biosnap"
-#"python train.py --size s --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#"python train.py --size m --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#"python train.py --size l --bottleneck_dim 128 --pooling 1 --train_encoder 1 --pretrained_encoder 0 --quantize 1 --level biosnap"
-#)
 configs=(
-"python train.py --auto_pretrained 1 --gen_mol 1 --dropout 0.2"
-"python train.py --auto_pretrained 1 --gen_mol 0 --dropout 0.2"
-"python train.py --auto_pretrained 1 --gen_mol 1 --dropout 0.2 --quantize 0"
-"python train.py --auto_pretrained 1 --gen_mol 0 --dropout 0.2 --quantize 0"
+"python train.py"
+"python train.py --gen_mol 1"
+"python train.py --cold_fasta 1 --gen_mol 1"
+"python train.py --cold_smiles 1"
+"python train.py --quantize 0"
+"python train.py --gen_mol 1 --quantize 0"
+"python train.py --cold_fasta 1 --gen_mol 1 --quantize 0"
+"python train.py --cold_smiles 1 --quantize 0"
+"python train.py --entropy_normalize 0"
+"python train.py --gen_mol 1 --entropy_normalize 0"
+"python train.py --cold_fasta 1 --gen_mol 1 --entropy_normalize 0"
+"python train.py --cold_smiles 1 --entropy_normalize 0"
+"python train.py --train_encoder 1"
+"python train.py --gen_mol 1 --train_encoder 1"
+"python train.py --cold_fasta 1 --gen_mol 1 --train_encoder 1"
+"python train.py --cold_smiles 1 --train_encoder 1"
+"python train.py --pretrained_encoder 0"
+"python train.py --gen_mol 1 --pretrained_encoder 0"
+"python train.py --cold_fasta 1 --gen_mol 1 --pretrained_encoder 0"
+"python train.py --cold_smiles 1 --pretrained_encoder 0"
+"python train.py --random_tgt 1"
+"python train.py --gen_mol 1 --random_tgt 1"
+"python train.py --cold_fasta 1 --gen_mol 1 --random_tgt 1"
+"python train.py --cold_smiles 1 --random_tgt 1"
 )
 # Get the config for the current index
 config=${configs[$split_index]}

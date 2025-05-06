@@ -503,9 +503,10 @@ class EndToEndModel(torch.nn.Module):
         # Apply trie constraints if needed
         if self.trie is None:
             return decoder_outputs
+
         decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels, entropy_normalize=self.entropy_normalize,
-                                                  path_weights_normalize=self.path_weights_normalize)
+                                                  labels, entropy_normalize=self.entropy_normalize and self.training,
+                                                  path_weights_normalize=self.path_weights_normalize and self.training)
         return decoder_outputs
 
 
@@ -547,7 +548,6 @@ class EnzymeDecoder(torch.nn.Module):
 
 
 def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model, batch_size=64, auc_only=False):
-
     from eval_dti import evaluate_model
     return evaluate_model(pos_valid, neg_valid, pos_test, neg_test, model,
                           batch_size=batch_size)
@@ -586,7 +586,7 @@ if __name__ == "__main__":
     parser.add_argument("--report_to", type=str, default="tensorboard")
     parser.add_argument("--size", type=str, default="l")
     parser.add_argument("--level", type=str, default="biosnap")
-    parser.add_argument("--dropout", type=float, default=0.0)
+    parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--trie", type=int, default=1)
     parser.add_argument("--bottleneck_dim", type=int, default=128)
     parser.add_argument("--pooling", type=int, default=1)
@@ -598,7 +598,7 @@ if __name__ == "__main__":
                         help="Whether to train the encoder (1) or freeze it (0)")
     parser.add_argument("--pretrained_encoder", type=int, default=1)
     parser.add_argument("--quantize", type=int, default=1)
-    parser.add_argument("--entropy_normalize", type=int, default=0)
+    parser.add_argument("--entropy_normalize", type=int, default=1)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
     parser.add_argument("--auto_pretrained", type=int, default=0)
 
@@ -628,7 +628,8 @@ if __name__ == "__main__":
                                                                            encoder_dim=encoder_dim)
     if args.auto_pretrained:
         from train_auto import get_auto_prep
-        src_model = get_auto_prep(is_mol=args.gen_mol==0)
+
+        src_model = get_auto_prep(is_mol=args.gen_mol == 0)
         src_model.to(device)
         src_model.eval()
         for param in src_model.parameters():
