@@ -103,7 +103,7 @@ results['proteins'] = analyze_data(inputs_prot, tokenizer_prot, is_molecules=Fal
 data_types = ['molecules', 'proteins']
 
 
-plt.figure(figsize=(10, 3))  # Increased height to make room for labels
+plt.figure(figsize=(10, 2.5))  # Increased height to make room for labels
 
 # Create subplots with minimal spacing but enough room for labels
 gs = plt.GridSpec(1, 4, wspace=0.1, hspace=0.3)
@@ -161,9 +161,9 @@ ax4.legend(loc="upper left")
 plt.setp(ax4.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
 # Add x-axis labels directly to the subplots instead of using fig.text
-ax1.set_xlabel("Active Sequence Length")
+ax1.set_xlabel("Active Sequence Length",ha='left')
 # ax2.set_xlabel("Active Sequence Length")
-ax3.set_xlabel("Mean Branching Factor")
+ax3.set_xlabel("Mean Branching Factor",ha='left')
 # ax4.set_xlabel("Mean Branching Factor")
 
 # set y limit for all subplots
