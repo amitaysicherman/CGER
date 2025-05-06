@@ -44,9 +44,9 @@ class SimpleVectorDataset(Dataset):
         self.src_mem = dict()
         self.tgt_mem = dict()
 
-        with open(f"data22/biosnap/{split}_enzyme.txt") as f:
+        with open(f"data/biosnap/{split}_enzyme.txt") as f:
             self.src_lines = f.read().splitlines()
-        with open(f"data22/biosnap/{split}_reaction.txt") as f:
+        with open(f"data/biosnap/{split}_reaction.txt") as f:
             self.tgt_lines = f.read().splitlines()
         assert len(self.src_lines) == len(self.tgt_lines)
 

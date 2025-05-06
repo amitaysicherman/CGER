@@ -253,7 +253,7 @@ def load_file(file_path):
 
 def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0):
     """Load training and testing files"""
-    base_dir = f"data22/{level}"
+    base_dir = f"data/{level}"
     if cold_smiles:
         base_dir += "_cs"
     if cold_fasta:
