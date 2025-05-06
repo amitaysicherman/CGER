@@ -128,7 +128,7 @@ def prepare_sequence_data(features, lengths, labels, max_seq_length):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, input_dim, d_model=128, nhead=2, num_layers=1, dropout=0.0, max_seq_length=512):
+    def __init__(self, input_dim, d_model=128, nhead=2, num_layers=1, dropout=0.0, max_seq_length=256):
 
         super().__init__()
 

@@ -137,7 +137,7 @@ def get_random_tokens(tokenizer, num_tokens=10):
 
 
 class RamdomReplace:
-    def __init__(self, tokenizer, num_tokens=512, vocab_size=0):
+    def __init__(self, tokenizer, num_tokens=256, vocab_size=0):
         self.tokenizer = tokenizer
         if vocab_size == 0:
             vocab_size = len(tokenizer)
@@ -253,7 +253,7 @@ def load_file(file_path):
 
 def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0):
     """Load training and testing files"""
-    base_dir = f"data/{level}"
+    base_dir = f"data22/{level}"
     if cold_smiles:
         base_dir += "_cs"
     if cold_fasta:
@@ -285,7 +285,7 @@ def load_files(level="easy", gen_mol=0, cold_smiles=0, cold_fasta=0, quantize=0)
 
 
 class SrcTgtDataset(TorchDataset):
-    def __init__(self, src_texts, tgt_texts, src_tokenizer, tgt_tokenizer, src_encoder=None, max_length=512,
+    def __init__(self, src_texts, tgt_texts, src_tokenizer, tgt_tokenizer, src_encoder=None, max_length=256,
                  pooling=False, train_encoder=False):
         self.src_texts = src_texts
         self.tgt_texts = tgt_texts
@@ -647,11 +647,11 @@ if __name__ == "__main__":
     if args.train_encoder:
         # Don't pass the encoder to dataset when training end-to-end
         train_dataset = SrcTgtDataset(src_train, tgt_train, src_tokenizer, tgt_tokenizer,
-                                      max_length=512, pooling=args.pooling, train_encoder=True)
+                                      max_length=256, pooling=args.pooling, train_encoder=True)
         valid_dataset = SrcTgtDataset(src_valid, tgt_valid, src_tokenizer, tgt_tokenizer,
-                                      max_length=512, pooling=args.pooling, train_encoder=True)
+                                      max_length=256, pooling=args.pooling, train_encoder=True)
         test_dataset = SrcTgtDataset(src_test, tgt_test, src_tokenizer, tgt_tokenizer,
-                                     max_length=512, pooling=args.pooling, train_encoder=True)
+                                     max_length=256, pooling=args.pooling, train_encoder=True)
     else:
         # Use the original approach with pre-computed encoder outputs
         train_dataset = SrcTgtDataset(src_train, tgt_train, src_tokenizer, tgt_tokenizer, src_model,
@@ -706,7 +706,7 @@ if __name__ == "__main__":
         # subset with size 1, run the script
         test_dataset_dummy = torch.utils.data.Subset(test_dataset, [0])
         eval_dataset = {"valid": test_dataset_dummy}
-        metric_for_best_model = "eval_auc"
+        metric_for_best_model = "eval_valid_auc"
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)
@@ -784,7 +784,7 @@ if __name__ == "__main__":
     eval_logging_callback = EvalLoggingCallback(output_dir=output_dir)
     trainer.add_callback(eval_logging_callback)
 
-    print(trainer.evaluate(eval_dataset["valid"]))
+    # print(trainer.evaluate(eval_dataset["valid"]))
     # Train model
     print("Training model...")
 

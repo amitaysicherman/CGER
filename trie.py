@@ -103,7 +103,7 @@ class Trie:
         print_node(self.root)
 
 
-def build_trie(word_list, tokenizer, max_length=512):
+def build_trie(word_list, tokenizer, max_length=256):
     tokens_list = []
     eos = tokenizer.eos_token_id if tokenizer.eos_token_id is not None else tokenizer.vocab.get("<eos>")
     for word in word_list:
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     esm_tokenizer = QuantizeTokenizer()
     with open("data/drugbank/train_enzyme_q.txt", "r") as f:
         trie_files = f.read().splitlines()
-    trie = build_trie(list(set(trie_files)), esm_tokenizer, max_length=512)
+    trie = build_trie(list(set(trie_files)), esm_tokenizer, max_length=256)
     print("Trie structure:")
     exp = "1 10 0 14 9 14 0 5 2 10 13 2 12 5 5 10 11 0 0 0 0 6 0 0 0 7 0 0 0 0 3 0 0 0 0 5 0 0 13 3 0 0 13 5 0 7 12 0 0 0 0 0 1 8 0 0 0 0 13 0 7 10 0 0 0 0 0 0 13 3 13 2 0 0 0 0 0 11 0 8 0 0 0 0 0 9 9 14 14 1 0 0 0 0 0 0 3 0 0 0 0 0 9 4 8 0 0 0 0 13 0 0 5 9 0 0 9 0 14 9 0 0 3 2".split()
     exp = [int(float(x)) for x in exp]

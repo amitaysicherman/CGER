@@ -15,7 +15,7 @@ if __name__ == "__main__":
     print("Tokenizer:", tokenizer)
 
     example_reaction = "CC(=O)O>>CC(=O)N"
-    tokens = tokenizer(example_reaction, truncation=True, padding="max_length", max_length=512, return_tensors="pt")
+    tokens = tokenizer(example_reaction, truncation=True, padding="max_length", max_length=256, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**tokens, output_hidden_states=True, output_attentions=True)
     print("Model Outputs:", outputs.keys())
