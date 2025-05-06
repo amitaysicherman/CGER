@@ -12,7 +12,8 @@ import glob
 from transformers import AutoModel
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 
 hidden_size_per_size = {"xs": 64, "s": 128, "m": 256, "l": 512, "xl": 1024}
 num_layers_per_size = {"xs": 2, "s": 4, "m": 6, "l": 8, "xl": 12}
@@ -546,23 +547,28 @@ class EnzymeDecoder(torch.nn.Module):
 
 
 def get_auc_valid_test(pos_valid, neg_valid, pos_test, neg_test, model, batch_size=64, auc_only=False):
-    auc_score, ap_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1, fmax = evaluate_model(
-        pos_valid,
-        neg_valid, model,
-        batch_size=batch_size,
-        auc_only=auc_only,
-        use_f1_max=auc_only)
-    test_auc_score, test_ap_score, _, test_best_acc_score, _, test_best_score_f1, test_fmax = evaluate_model(pos_test,
-                                                                                                             neg_test,
-                                                                                                             model,
-                                                                                                             best_acc_threshold=best_acc_threshold,
-                                                                                                             best_f1_threshold=best_f1_threshold,
-                                                                                                             batch_size=batch_size,
-                                                                                                             auc_only=auc_only,
-                                                                                                             use_f1_max=auc_only)
-    return {"auc": auc_score, "auc_test": test_auc_score, "acc": best_acc_score, "f1": best_score_f1,
-            "acc_test": test_best_acc_score, "f1_test": test_best_score_f1, "ap": ap_score, "ap_test": test_ap_score,
-            "fmax": fmax, "fmax_test": test_fmax}
+
+    from eval_dti import evaluate_model
+    return evaluate_model(pos_valid, neg_valid, pos_test, neg_test, model,
+                          batch_size=batch_size)
+
+    # auc_score, ap_score, best_acc_threshold, best_acc_score, best_f1_threshold, best_score_f1, fmax = evaluate_model(
+    #     pos_valid,
+    #     neg_valid, model,
+    #     batch_size=batch_size,
+    #     auc_only=auc_only,
+    #     use_f1_max=auc_only)
+    # test_auc_score, test_ap_score, _, test_best_acc_score, _, test_best_score_f1, test_fmax = evaluate_model(pos_test,
+    #                                                                                                          neg_test,
+    #                                                                                                          model,
+    #                                                                                                          best_acc_threshold=best_acc_threshold,
+    #                                                                                                          best_f1_threshold=best_f1_threshold,
+    #                                                                                                          batch_size=batch_size,
+    #                                                                                                          auc_only=auc_only,
+    #                                                                                                          use_f1_max=auc_only)
+    # return {"auc": auc_score, "auc_test": test_auc_score, "acc": best_acc_score, "f1": best_score_f1,
+    #         "acc_test": test_best_acc_score, "f1_test": test_best_score_f1, "ap": ap_score, "ap_test": test_ap_score,
+    #         "fmax": fmax, "fmax_test": test_fmax}
 
 
 if __name__ == "__main__":
@@ -777,7 +783,7 @@ if __name__ == "__main__":
     eval_logging_callback = EvalLoggingCallback(output_dir=output_dir)
     trainer.add_callback(eval_logging_callback)
 
-    # print(trainer.evaluate(eval_dataset["valid"]))
+    print(trainer.evaluate(eval_dataset["valid"]))
     # Train model
     print("Training model...")
 
