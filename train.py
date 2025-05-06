@@ -705,7 +705,7 @@ if __name__ == "__main__":
         # subset with size 1, run the script
         test_dataset_dummy = torch.utils.data.Subset(test_dataset, [0])
         eval_dataset = {"valid": test_dataset_dummy}
-        metric_for_best_model = "eval_valid_auc"
+        metric_for_best_model = "eval_auc"
 
     else:
         compute_metrics_func = lambda x: compute_metrics(x)
