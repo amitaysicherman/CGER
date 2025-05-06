@@ -123,7 +123,7 @@ ax1.hist(results[data_types[0]]['active_length'],
         label=f"{data_types[0].capitalize()}",
         color="tab:blue")
 ax1.set_ylabel("Percentage")
-ax1.set_title(f"{data_types[0].capitalize()}")
+# ax1.set_title(f"{data_types[0].capitalize()}")
 ax1.legend(loc="upper left")
 ax1.set_ylim(0, max_density * 1.1)  # Set y-limit with some margin
 ax1.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0, decimals=0))
@@ -134,7 +134,7 @@ ax2.hist(results[data_types[1]]['active_length'],
         density=True,
         label=f"{data_types[1].capitalize()}",
         color="tab:blue")
-ax2.set_title(f"{data_types[1].capitalize()}")
+# ax2.set_title(f"{data_types[1].capitalize()}")
 ax2.legend(loc="upper left")
 plt.setp(ax2.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
@@ -145,7 +145,7 @@ ax3.hist(results[data_types[0]]['active_levels'],
         label=f"{data_types[0].capitalize()}",
         color="tab:orange")
 # ax3.set_ylabel("Percentage")
-ax3.set_title(f"{data_types[0].capitalize()}")
+# ax3.set_title(f"{data_types[0].capitalize()}")
 ax3.legend(loc="upper left")
 ax3.yaxis.set_major_formatter(plt.matplotlib.ticker.PercentFormatter(1.0, decimals=0))
 plt.setp(ax3.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
@@ -156,7 +156,7 @@ ax4.hist(results[data_types[1]]['active_levels'],
         density=True,
         label=f"{data_types[1].capitalize()}",
         color="tab:orange")
-ax4.set_title(f"{data_types[1].capitalize()}")
+# ax4.set_title(f"{data_types[1].capitalize()}")
 ax4.legend(loc="upper left")
 plt.setp(ax4.get_yticklabels(), visible=False)  # Hide y-ticks for shared y-axis
 
