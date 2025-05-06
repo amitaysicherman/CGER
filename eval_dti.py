@@ -235,14 +235,17 @@ def train_epoch(model, dataloader, criterion, optimizer):
 
 def get_metrics(y_true, y_pred):
     metrics = {}
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    y_pred_binary = (y_pred > 0.5).astype(int)
     metrics['auc'] = roc_auc_score(y_true, y_pred)
     metrics['ap'] = average_precision_score(y_true, y_pred)
-    metrics['accuracy'] = accuracy_score(y_true, y_pred)
-    metrics['precision'] = precision_score(y_true, y_pred)
-    metrics['recall'] = recall_score(y_true, y_pred)
-    metrics['f1'] = f1_score(y_true, y_pred)
-    metrics['sensitivity'] = recall_score(y_true, y_pred)
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+    metrics['accuracy'] = accuracy_score(y_true, y_pred_binary)
+    metrics['precision'] = precision_score(y_true, y_pred_binary)
+    metrics['recall'] = recall_score(y_true, y_pred_binary)
+    metrics['f1'] = f1_score(y_true, y_pred_binary)
+    metrics['sensitivity'] = recall_score(y_true, y_pred_binary)
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred_binary).ravel()
     metrics['specificity'] = tn / (tn + fp) if (tn + fp) > 0 else 0
     return metrics
 
