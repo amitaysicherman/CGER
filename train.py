@@ -503,7 +503,7 @@ class EndToEndModel(torch.nn.Module):
         # Apply trie constraints if needed
         if self.trie is None:
             return decoder_outputs
-        if self.constraint == 0 or (self.constraint == 2 and self.training):
+        if self.constraint == 0 or (self.constraint == 2 and not self.training):
             decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie,
                                                       self.decoder.config.vocab_size,
                                                       labels,
@@ -543,7 +543,7 @@ class EnzymeDecoder(torch.nn.Module):
         )
         if self.trie is None:
             return decoder_outputs
-        if self.constraint == 0 or (self.constraint == 2 and self.training):
+        if self.constraint == 0 or (self.constraint == 2 and not self.training):
             decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie,
                                                       self.decoder.config.vocab_size,
                                                       labels, entropy_normalize=self.entropy_normalize,
