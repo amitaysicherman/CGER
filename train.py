@@ -759,7 +759,7 @@ if __name__ == "__main__":
     if args.constraint == 1:
         output_dir += "_noconstraint"
     if args.constraint == 2:
-        output_dir += "_infconstraint"
+        output_dir += "_evalconstraint"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
