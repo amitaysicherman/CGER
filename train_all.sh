@@ -4,13 +4,17 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=27-31
+#SBATCH --array=0-3
 
 level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 split_index=$(($SLURM_ARRAY_TASK_ID))
 configs=(
+"python train.py --constraint 1 --quantize 0"
+"python train.py --gen_mol 1 --constraint 1 --quantize 0"
+"python train.py --cold_fasta 1 --gen_mol 1 --constraint 1 --quantize 0"
+"python train.py --cold_smiles 1 --constraint 1 --quantize 0"
 "python train.py"
 "python train.py --gen_mol 1"
 "python train.py --cold_fasta 1 --gen_mol 1"
@@ -43,7 +47,6 @@ configs=(
 "python train.py --gen_mol 1 --constraint 1"
 "python train.py --cold_fasta 1 --gen_mol 1 --constraint 1"
 "python train.py --cold_smiles 1 --constraint 1"
-
 )
 # Get the config for the current index
 config=${configs[$split_index]}
