@@ -605,7 +605,7 @@ if __name__ == "__main__":
     parser.add_argument("--entropy_normalize", type=int, default=1)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
     parser.add_argument("--auto_pretrained", type=int, default=0)
-    parser.add_argument("---constraint", type=int, default=0)
+    parser.add_argument("--constraint", type=int, default=0)
     # parser.add_argument("--prot_model", type=str, default="facebook/esm2_t33_650M_UR50D")
     # parser.add_argument("--mol_model", type=str, default="ibm/MoLFormer-XL-both-10pct")
     args = parser.parse_args()
