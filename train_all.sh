@@ -4,7 +4,7 @@
 #SBATCH --requeue
 #SBATCH -c 8
 #SBATCH --gres=gpu:L40:1
-#SBATCH --array=0-23
+#SBATCH --array=23-27
 
 level=$1
 export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -35,6 +35,11 @@ configs=(
 "python train.py --gen_mol 1 --random_tgt 1"
 "python train.py --cold_fasta 1 --gen_mol 1 --random_tgt 1"
 "python train.py --cold_smiles 1 --random_tgt 1"
+"python train.py --constraint 1"
+"python train.py --constraint 2"
+"python train.py --constraint 1 --gen_mol 1"
+"python train.py --constraint 2 --gen_mol 1"
+
 )
 # Get the config for the current index
 config=${configs[$split_index]}

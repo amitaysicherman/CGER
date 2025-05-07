@@ -452,7 +452,7 @@ def update_output_with_trie(decoder_outputs, input_ids, trie, vocab_size, labels
 
 class EndToEndModel(torch.nn.Module):
     def __init__(self, encoder, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, pooling=False,
-                 entropy_normalize=False, path_weights_normalize=False):
+                 entropy_normalize=False, path_weights_normalize=False, constraint=0):
         super(EndToEndModel, self).__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -460,7 +460,7 @@ class EndToEndModel(torch.nn.Module):
         self.path_weights_normalize = path_weights_normalize
         self.trie = trie
         self.pooling = pooling
-
+        self.constraint = constraint
         if bottleneck_dim > 0:
             self.encoder_project = torch.nn.Sequential(
                 torch.nn.Linear(encoder_dim, bottleneck_dim),
@@ -503,21 +503,24 @@ class EndToEndModel(torch.nn.Module):
         # Apply trie constraints if needed
         if self.trie is None:
             return decoder_outputs
-
-        decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels, entropy_normalize=self.entropy_normalize and self.training,
-                                                  path_weights_normalize=self.path_weights_normalize and self.training)
+        if self.constraint == 0 or (self.constraint == 2 and self.training):
+            decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie,
+                                                      self.decoder.config.vocab_size,
+                                                      labels,
+                                                      entropy_normalize=self.entropy_normalize and self.training,
+                                                      path_weights_normalize=self.path_weights_normalize and self.training)
         return decoder_outputs
 
 
 class EnzymeDecoder(torch.nn.Module):
     def __init__(self, decoder, trie=None, encoder_dim=ENCODER_DIM, bottleneck_dim=0, entropy_normalize=False,
-                 path_weights_normalize=False):
+                 path_weights_normalize=False, constraint=0):
         super(EnzymeDecoder, self).__init__()
         self.decoder = decoder
         self.trie = trie
         self.entropy_normalize = entropy_normalize
         self.path_weights_normalize = path_weights_normalize
+        self.constraint = constraint
         if bottleneck_dim > 0:
             self.encoder_project = torch.nn.Sequential(
                 torch.nn.Linear(encoder_dim, bottleneck_dim),
@@ -540,10 +543,11 @@ class EnzymeDecoder(torch.nn.Module):
         )
         if self.trie is None:
             return decoder_outputs
-
-        decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie, self.decoder.config.vocab_size,
-                                                  labels, entropy_normalize=self.entropy_normalize,
-                                                  path_weights_normalize=self.path_weights_normalize)
+        if self.constraint == 0 or (self.constraint == 2 and self.training):
+            decoder_outputs = update_output_with_trie(decoder_outputs, input_ids, self.trie,
+                                                      self.decoder.config.vocab_size,
+                                                      labels, entropy_normalize=self.entropy_normalize,
+                                                      path_weights_normalize=self.path_weights_normalize)
         return decoder_outputs
 
 
@@ -601,7 +605,9 @@ if __name__ == "__main__":
     parser.add_argument("--entropy_normalize", type=int, default=1)
     parser.add_argument("--path_weights_normalize", type=int, default=0)
     parser.add_argument("--auto_pretrained", type=int, default=0)
-
+    parser.add_argument("---constraint", type=int, default=0)
+    # parser.add_argument("--prot_model", type=str, default="facebook/esm2_t33_650M_UR50D")
+    # parser.add_argument("--mol_model", type=str, default="ibm/MoLFormer-XL-both-10pct")
     args = parser.parse_args()
 
     src_train, tgt_train, src_valid, tgt_valid, src_test, tgt_test = load_files(level=args.level, gen_mol=args.gen_mol,
@@ -679,7 +685,8 @@ if __name__ == "__main__":
             bottleneck_dim=args.bottleneck_dim,
             pooling=args.pooling,
             entropy_normalize=args.entropy_normalize,
-            path_weights_normalize=args.path_weights_normalize
+            path_weights_normalize=args.path_weights_normalize,
+            constraint=args.constraint,
         )
     else:
         model = EnzymeDecoder(
@@ -688,7 +695,8 @@ if __name__ == "__main__":
             encoder_dim=encoder_dim,
             bottleneck_dim=args.bottleneck_dim,
             entropy_normalize=args.entropy_normalize,
-            path_weights_normalize=args.path_weights_normalize
+            path_weights_normalize=args.path_weights_normalize,
+            constraint=args.constraint,
         )
 
     if args.level != "easy":
@@ -748,6 +756,10 @@ if __name__ == "__main__":
         output_dir += "_noenc"
     if args.auto_pretrained:
         output_dir += "_autoenc"
+    if args.constraint == 1:
+        output_dir += "_noconstraint"
+    if args.constraint == 2:
+        output_dir += "_infconstraint"
     output_dir = output_dir.replace("results", f"results_{args.level}")
     logs_dir = output_dir.replace("results", "logs")
     training_args = TrainingArguments(
